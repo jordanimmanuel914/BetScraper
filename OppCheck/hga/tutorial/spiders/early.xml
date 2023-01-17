@@ -1,0 +1,383 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<serverresponse id='128.8'>
+    <code>get_league_list_All</code>
+    <status>success</status>
+    <ts>1673547512033</ts>
+    <gtype>FT</gtype>
+    <datelist>
+        <date_0>
+            <month>JAN</month>
+            <date>13</date>
+            <week>FRI</week>
+        </date_0>
+        <date_1>
+            <month>JAN</month>
+            <date>14</date>
+            <week>SAT</week>
+        </date_1>
+        <date_2>
+            <month>JAN</month>
+            <date>15</date>
+            <week>SUN</week>
+        </date_2>
+        <date_3>
+            <month>JAN</month>
+            <date>16</date>
+            <week>MON</week>
+        </date_3>
+        <date_4>
+            <month>JAN</month>
+            <date>17</date>
+            <week>TUE</week>
+        </date_4>
+        <date_5>
+            <month>JAN</month>
+            <date>18</date>
+            <week>WED</week>
+        </date_5>
+        <date_6>
+            <month>JAN</month>
+            <date>19</date>
+            <week>THU</week>
+        </date_6>
+        <date_7>
+            <month>JAN</month>
+            <date>20</date>
+            <week>FRI</week>
+        </date_7>
+    </datelist>
+    <coupons>
+        <coupon_sw>Y</coupon_sw>
+        <coupon id='1'>
+            <name>Matches - Sat 14 Jan</name>
+            <lid>
+                102529,102907,100797,100100,100065,100807,102814,109364,101743,100128,103391,101912,100405,107215,102744,100099,107242,100397,102737,101811,100116,103714,103285,100030,100021,100032,100026,100235,100064,100710,100111,100049,100173,100127,100101,100283,101911,102819,100277,100038,100142,100078,101916,100047,100123,109346,101850</lid>
+            <field>cp1</field>
+        </coupon>
+        <coupon id='2'>
+            <name>UEFA Matches</name>
+            <lid>100824,100822,109306</lid>
+            <field>HotGame_FT_lid_0</field>
+        </coupon>
+        <coupon id='3'>
+            <name>Top European Leagues</name>
+            <lid>100028,100030,100021,100026</lid>
+            <field>HotGame_FT_lid_1</field>
+        </coupon>
+        <coupon id='4'>
+            <name>Top European Domestic Cups</name>
+            <lid>101056,100817,100813,100791</lid>
+            <field>HotGame_FT_lid_2</field>
+        </coupon>
+    </coupons>
+    <classifier>
+        <classifier_sw>Y</classifier_sw>
+        <region name='England' id='120' t_sort='England' sort_name='011' sorttype='sort'
+            flag_class='icon_flag flag_GB_ENG'>
+            <league name='English Premier League' id='100021' t_sort='10800' grp='1'
+                sort_name='English Premier League'></league>
+            <league name='English League Championship' id='100235' t_sort='12000' grp='3'
+                sort_name='English League Championship'></league>
+            <league name='English FA Cup' id='100791' t_sort='14000' grp='8'
+                sort_name='English FA Cup'></league>
+            <league name='English League 1' id='100127' t_sort='14000' grp='8'
+                sort_name='English League 1'></league>
+            <league name='English League 2' id='100128' t_sort='14001' grp='4'
+                sort_name='English League 2'></league>
+            <league name='English National League' id='100283' t_sort='14050' grp='5'
+                sort_name='English National League'></league>
+            <league name='English FA Trophy' id='100807' t_sort='15000' grp='8'
+                sort_name='English FA Trophy'></league>
+            <league name='English National League North' id='101912' t_sort='15100' grp='6'
+                sort_name='English National League North'></league>
+            <league name='English National League South' id='101911' t_sort='15100' grp='6'
+                sort_name='English National League South'></league>
+            <league name='English Women Super League' id='104571' t_sort='15800' grp='10'
+                sort_name='English Women Super League'></league>
+        </region>
+        <region name='Spain' id='34' t_sort='Spain' sort_name='012' sorttype='sort'
+            flag_class='icon_flag flag_ES'>
+            <league name='Spain Primera Division' id='100030' t_sort='10910' grp='1'
+                sort_name='Spain Primera Division'></league>
+            <league name='Spain Segunda Division' id='100064' t_sort='12045' grp='3'
+                sort_name='Spain Segunda Division'></league>
+            <league name='Spain Cup' id='100813' t_sort='13750' grp='3' sort_name='Spain Cup'></league>
+            <league name='Spain Primera Federacion' id='109346' t_sort='15490' grp='9'
+                sort_name='Spain Primera Federacion'></league>
+            <league name='Spain Segunda Federacion' id='102819' t_sort='15500' grp='10'
+                sort_name='Spain Segunda Federacion'></league>
+            <league name='Spain Women Primera Division' id='101850' t_sort='15800' grp='9'
+                sort_name='Spain Women Primera Division'></league>
+        </region>
+        <region name='Germany' id='30' t_sort='Germany' sort_name='013' sorttype='sort'
+            flag_class='icon_flag flag_DE'>
+            <league name='Germany Bundesliga 1' id='100028' t_sort='10920' grp='1'
+                sort_name='Germany Bundesliga 1'></league>
+            <league name='Germany Bundesliga 2' id='100117' t_sort='11025' grp='2'
+                sort_name='Germany Bundesliga 2'></league>
+            <league name='Germany DFB Cup' id='100783' t_sort='11800' grp='2'
+                sort_name='Germany DFB Cup'></league>
+            <league name='Germany 3rd Liga' id='102529' t_sort='14003' grp='4'
+                sort_name='Germany 3rd Liga'></league>
+            <league name='Germany Regionalliga North' id='100274' t_sort='14500' grp='6'
+                sort_name='Germany Regionalliga North'></league>
+            <league name='Germany Regionalliga Northeast' id='106023' t_sort='14500' grp='6'
+                sort_name='Germany Regionalliga Northeast'></league>
+            <league name='Germany Regionalliga West' id='102622' t_sort='14500' grp='6'
+                sort_name='Germany Regionalliga West'></league>
+        </region>
+        <region name='Italy' id='53' t_sort='Italy' sort_name='014' sorttype='sort'
+            flag_class='icon_flag flag_IT'>
+            <league name='Italy Serie A' id='100026' t_sort='10930' grp='1'
+                sort_name='Italy Serie A'></league>
+            <league name='Italy Super Cup' id='101056' t_sort='10930' grp='1'
+                sort_name='Italy Super Cup'></league>
+            <league name='Italy Cup' id='100817' t_sort='11000' grp='2' sort_name='Italy Cup'></league>
+            <league name='Italy Serie B' id='100065' t_sort='12050' grp='3'
+                sort_name='Italy Serie B'></league>
+            <league name='Italy Serie C Cup' id='102006' t_sort='15200' grp='9'
+                sort_name='Italy Serie C Cup'></league>
+            <league name='Italy Serie C' id='107215' t_sort='15288' grp='9'
+                sort_name='Italy Serie C'></league>
+        </region>
+        <region name='Europe' id='119' t_sort='Europe' sort_name='015' sorttype='sort'
+            flag_class='icon_flag flag_EU'>
+            <league name='UEFA Champions League' id='100822' t_sort='11010' grp='1'
+                sort_name='UEFA Champions League'></league>
+            <league name='UEFA Europa League' id='100824' t_sort='11020' grp='2'
+                sort_name='UEFA Europa League'></league>
+            <league name='UEFA Europa Conference League' id='109306' t_sort='11030' grp='3'
+                sort_name='UEFA Europa Conference League'></league>
+        </region>
+        <region name='Australia' id='6' t_sort='Australia' sort_name='020' sorttype='sort'
+            flag_class='icon_flag flag_AU'>
+            <league name='Australia A League' id='100710' t_sort='10500' grp='2'
+                sort_name='Australia A League'></league>
+            <league name='Australia A League Women' id='102737' t_sort='18001' grp='5'
+                sort_name='Australia A League Women'></league>
+        </region>
+        <region name='Japan' id='55' t_sort='Japan' sort_name='022' sorttype='sort'
+            flag_class='icon_flag flag_JP'>
+            <league name='Japan Super Cup' id='101253' t_sort='11490' grp='2'
+                sort_name='Japan Super Cup'></league>
+        </region>
+        <region name='South America' id='133' t_sort='South America' sort_name='031' sorttype='sort'
+            flag_class='icon_flag flag_SAM'>
+            <league name='Recopa Sudamericana' id='101076' t_sort='16000' grp='2'
+                sort_name='Recopa Sudamericana'></league>
+            <league name='Sudamericano U20 2023 (In Colombia)' id='101194' t_sort='16600' grp='4'
+                sort_name='Sudamericano U20 2023 (In Colombia)'></league>
+        </region>
+        <region name='Brazil' id='17' t_sort='Brazil' sort_name='034' sorttype='sort'
+            flag_class='icon_flag flag_BR'>
+            <league name='Brazil Campeonato Paulista Serie A1' id='100397' t_sort='16500' grp='5'
+                sort_name='Brazil Campeonato Paulista Serie A1'></league>
+            <league name='Brazil Campeonato Carioca Serie A' id='100405' t_sort='19035' grp='9'
+                sort_name='Brazil Campeonato Carioca Serie A'></league>
+        </region>
+        <region name='Argentina' id='4' t_sort='Argentina' sort_name='Argentina' sorttype='name'
+            flag_class='icon_flag flag_AR'>
+            <league name='Argentina Liga Profesional' id='100154' t_sort='16020' grp='3'
+                sort_name='Argentina Liga Profesional'></league>
+        </region>
+        <region name='Austria' id='7' t_sort='Austria' sort_name='Austria' sorttype='name'
+            flag_class='icon_flag flag_AT'>
+            <league name='Austria Bundesliga' id='100110' t_sort='12011' grp='7'
+                sort_name='Austria Bundesliga'></league>
+            <league name='Austria 2 Liga' id='100267' t_sort='13010' grp='8'
+                sort_name='Austria 2 Liga'></league>
+            <league name='Austria Cup' id='100805' t_sort='15500' grp='7' sort_name='Austria Cup'></league>
+        </region>
+        <region name='Belgium' id='14' t_sort='Belgium' sort_name='Belgium' sorttype='name'
+            flag_class='icon_flag flag_BE'>
+            <league name='Belgium First Division A' id='100111' t_sort='12005' grp='3'
+                sort_name='Belgium First Division A'></league>
+            <league name='Belgium Challenger Pro League' id='100286' t_sort='15000' grp='5'
+                sort_name='Belgium Challenger Pro League'></league>
+        </region>
+        <region name='Chile' id='20' t_sort='Chile' sort_name='Chile' sorttype='name'
+            flag_class='icon_flag flag_CL'>
+            <league name='Chile Super Cup' id='106597' t_sort='14800' grp='8'
+                sort_name='Chile Super Cup'></league>
+            <league name='Chile Primera Division' id='100276' t_sort='16600' grp='8'
+                sort_name='Chile Primera Division'></league>
+        </region>
+        <region name='Costa Rica' id='23' t_sort='Costa Rica' sort_name='Costa Rica' sorttype='name'
+            flag_class='icon_flag flag_CR'>
+            <league name='Costa Rica Primera Division' id='103391' t_sort='18000' grp='9'
+                sort_name='Costa Rica Primera Division'></league>
+        </region>
+        <region name='Croatia' id='45' t_sort='Croatia' sort_name='Croatia' sorttype='name'
+            flag_class='icon_flag flag_HR'>
+            <league name='Croatia HNL League' id='100182' t_sort='15300' grp='9'
+                sort_name='Croatia HNL League'></league>
+        </region>
+        <region name='Cyprus' id='24' t_sort='Cyprus' sort_name='Cyprus' sorttype='name'
+            flag_class='icon_flag flag_CY'>
+            <league name='Cyprus Cup' id='100897' t_sort='15200' grp='5' sort_name='Cyprus Cup'></league>
+            <league name='Cyprus Division 1' id='100116' t_sort='15500' grp='5'
+                sort_name='Cyprus Division 1'></league>
+        </region>
+        <region name='Czech Republic' id='25' t_sort='Czech Republic' sort_name='Czech Republic'
+            sorttype='name' flag_class='icon_flag flag_CZ'>
+            <league name='Czech Republic First League' id='100083' t_sort='14010' grp='8'
+                sort_name='Czech Republic First League'></league>
+        </region>
+        <region name='Denmark' id='27' t_sort='Denmark' sort_name='Denmark' sorttype='name'
+            flag_class='icon_flag flag_DK'>
+            <league name='Denmark Super League' id='100037' t_sort='11950' grp='3'
+                sort_name='Denmark Super League'></league>
+            <league name='Denmark 1st Division' id='100118' t_sort='14001' grp='8'
+                sort_name='Denmark 1st Division'></league>
+        </region>
+        <region name='France' id='36' t_sort='France' sort_name='France' sorttype='name'
+            flag_class='icon_flag flag_FR'>
+            <league name='France Ligue 1' id='100032' t_sort='11020' grp='2'
+                sort_name='France Ligue 1'></league>
+            <league name='France Ligue 2' id='100078' t_sort='13050' grp='8'
+                sort_name='France Ligue 2'></league>
+            <league name='France Championnat National' id='100448' t_sort='15000' grp='5'
+                sort_name='France Championnat National'></league>
+        </region>
+        <region name='Greece' id='39' t_sort='Greece' sort_name='Greece' sorttype='name'
+            flag_class='icon_flag flag_GR'>
+            <league name='Greece Super League 1' id='100142' t_sort='13010' grp='3'
+                sort_name='Greece Super League 1'></league>
+        </region>
+        <region name='Hungary' id='44' t_sort='Hungary' sort_name='Hungary' sorttype='name'
+            flag_class='icon_flag flag_HU'>
+            <league name='Hungary NB I' id='100121' t_sort='15300' grp='6' sort_name='Hungary NB I'></league>
+            <league name='Hungary Cup' id='100826' t_sort='15300' grp='9' sort_name='Hungary Cup'></league>
+        </region>
+        <region name='India' id='47' t_sort='India' sort_name='India' sorttype='name'
+            flag_class='icon_flag flag_IN'>
+            <league name='India Super League' id='107242' t_sort='15300' grp='8'
+                sort_name='India Super League'></league>
+            <league name='India I League' id='103285' t_sort='15800' grp='6'
+                sort_name='India I League'></league>
+        </region>
+        <region name='International' id='130' t_sort='International' sort_name='International'
+            sorttype='name' flag_class='icon_flag flag_INT'>
+            <league name='UEFA Euro 2024 Qualifiers' id='104011' t_sort='12000' grp='2'
+                sort_name='UEFA Euro 2024 Qualifiers'></league>
+            <league name='International Friendly' id='100808' t_sort='12042' grp='2'
+                sort_name='International Friendly'></league>
+            <league name='Africa Nations Championship 2022 (In Algeria)' id='102907' t_sort='15000'
+                grp='8' sort_name='Africa Nations Championship 2022 (In Algeria)'></league>
+        </region>
+        <region name='Israel' id='52' t_sort='Israel' sort_name='Israel' sorttype='name'
+            flag_class='icon_flag flag_IL'>
+            <league name='Israel Premier League' id='102744' t_sort='15500' grp='9'
+                sort_name='Israel Premier League'></league>
+        </region>
+        <region name='Mexico' id='72' t_sort='Mexico' sort_name='Mexico' sorttype='name'
+            flag_class='icon_flag flag_MX'>
+            <league name='Mexico Liga MX' id='100277' t_sort='16500' grp='7'
+                sort_name='Mexico Liga MX'></league>
+            <league name='Mexico Liga Expansion MX' id='103166' t_sort='18500' grp='8'
+                sort_name='Mexico Liga Expansion MX'></league>
+        </region>
+        <region name='Morocco' id='77' t_sort='Morocco' sort_name='Morocco' sorttype='name'
+            flag_class='icon_flag flag_MA'>
+            <league name='Morocco Botola Pro' id='102814' t_sort='15800' grp='9'
+                sort_name='Morocco Botola Pro'></league>
+        </region>
+        <region name='Netherlands' id='79' t_sort='Netherlands' sort_name='Netherlands'
+            sorttype='name' flag_class='icon_flag flag_NL'>
+            <league name='Netherlands Eredivisie' id='100049' t_sort='11050' grp='2'
+                sort_name='Netherlands Eredivisie'></league>
+            <league name='Netherlands Eerste Divisie' id='100265' t_sort='13010' grp='8'
+                sort_name='Netherlands Eerste Divisie'></league>
+        </region>
+        <region name='Northern Ireland' id='121' t_sort='Northern Ireland'
+            sort_name='Northern Ireland' sorttype='name' flag_class='icon_flag flag_GB_NIR'>
+            <league name='Northern Ireland Premiership' id='101811' t_sort='15100' grp='10'
+                sort_name='Northern Ireland Premiership'></league>
+        </region>
+        <region name='Paraguay' id='88' t_sort='Paraguay' sort_name='Paraguay' sorttype='name'
+            flag_class='icon_flag flag_PY'>
+            <league name='Paraguay Super Cup' id='109382' t_sort='17800' grp='9'
+                sort_name='Paraguay Super Cup'></league>
+        </region>
+        <region name='Poland' id='91' t_sort='Poland' sort_name='Poland' sorttype='name'
+            flag_class='icon_flag flag_PL'>
+            <league name='Poland Ekstraklasa' id='100076' t_sort='13000' grp='7'
+                sort_name='Poland Ekstraklasa'></league>
+        </region>
+        <region name='Portugal' id='92' t_sort='Portugal' sort_name='Portugal' sorttype='name'
+            flag_class='icon_flag flag_PT'>
+            <league name='Portugal Primeira Liga' id='100173' t_sort='12010' grp='3'
+                sort_name='Portugal Primeira Liga'></league>
+            <league name='Portugal League Cup' id='101671' t_sort='14000' grp='3'
+                sort_name='Portugal League Cup'></league>
+            <league name='Portugal Liga 2' id='100047' t_sort='15000' grp='4'
+                sort_name='Portugal Liga 2'></league>
+            <league name='Portugal Liga 3' id='109364' t_sort='15800' grp='9'
+                sort_name='Portugal Liga 3'></league>
+        </region>
+        <region name='Qatar' id='94' t_sort='Qatar' sort_name='Qatar' sorttype='name'
+            flag_class='icon_flag flag_QA'>
+            <league name='Qatar Stars League' id='101200' t_sort='14900' grp='8'
+                sort_name='Qatar Stars League'></league>
+        </region>
+        <region name='Republic of Ireland' id='51' t_sort='Republic of Ireland'
+            sort_name='Republic of Ireland' sorttype='name' flag_class='icon_flag flag_IE'>
+            <league name='Ireland Premier Division' id='100217' t_sort='12950' grp='3'
+                sort_name='Ireland Premier Division'></league>
+        </region>
+        <region name='Scotland' id='122' t_sort='Scotland' sort_name='Scotland' sorttype='name'
+            flag_class='icon_flag flag_GB_SCT'>
+            <league name='Scotland Premiership' id='100038' t_sort='12008' grp='7'
+                sort_name='Scotland Premiership'></league>
+            <league name='Scotland FA Cup' id='100802' t_sort='14000' grp='6'
+                sort_name='Scotland FA Cup'></league>
+            <league name='Scotland Championship' id='100099' t_sort='15000' grp='6'
+                sort_name='Scotland Championship'></league>
+            <league name='Scotland League Cup' id='100797' t_sort='15000' grp='7'
+                sort_name='Scotland League Cup'></league>
+            <league name='Scotland League 1' id='100100' t_sort='15000' grp='10'
+                sort_name='Scotland League 1'></league>
+            <league name='Scotland League 2' id='100101' t_sort='15000' grp='10'
+                sort_name='Scotland League 2'></league>
+        </region>
+        <region name='Slovakia' id='101' t_sort='Slovakia' sort_name='Slovakia' sorttype='name'
+            flag_class='icon_flag flag_SK'>
+            <league name='Slovakia Super League' id='100085' t_sort='15250' grp='9'
+                sort_name='Slovakia Super League'></league>
+        </region>
+        <region name='South Africa' id='117' t_sort='South Africa' sort_name='South Africa'
+            sorttype='name' flag_class='icon_flag flag_ZA'>
+            <league name='South Africa Premiership' id='101916' t_sort='15800' grp='9'
+                sort_name='South Africa Premiership'></league>
+        </region>
+        <region name='Switzerland' id='26' t_sort='Switzerland' sort_name='Switzerland'
+            sorttype='name' flag_class='icon_flag flag_CH'>
+            <league name='Switzerland Super League' id='100189' t_sort='12050' grp='3'
+                sort_name='Switzerland Super League'></league>
+            <league name='Switzerland Cup' id='100792' t_sort='13010' grp='8'
+                sort_name='Switzerland Cup'></league>
+            <league name='Switzerland Challenge League' id='100279' t_sort='14000' grp='4'
+                sort_name='Switzerland Challenge League'></league>
+        </region>
+        <region name='Thailand' id='107' t_sort='Thailand' sort_name='Thailand' sorttype='name'
+            flag_class='icon_flag flag_TH'>
+            <league name='Thailand League 2' id='103714' t_sort='15402' grp='10'
+                sort_name='Thailand League 2'></league>
+        </region>
+        <region name='Turkey' id='109' t_sort='Turkey' sort_name='Turkey' sorttype='name'
+            flag_class='icon_flag flag_TR'>
+            <league name='Turkey Super League' id='100123' t_sort='12020' grp='7'
+                sort_name='Turkey Super League'></league>
+            <league name='Turkey TFF First League' id='101743' t_sort='15100' grp='6'
+                sort_name='Turkey TFF First League'></league>
+            <league name='Turkey Cup' id='100803' t_sort='15300' grp='8' sort_name='Turkey Cup'></league>
+        </region>
+        <region name='UAE' id='9' t_sort='UAE' sort_name='UAE' sorttype='name'
+            flag_class='icon_flag flag_AE'>
+            <league name='UAE Pro League' id='101323' t_sort='15600' grp='4'
+                sort_name='UAE Pro League'></league>
+        </region>
+    </classifier>
+    <classifier_debug></classifier_debug>
+    <coupon_debug></coupon_debug>
+</serverresponse>

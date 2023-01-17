@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<serverresponse id='128.53'>
+    <code>get_league_list_All</code>
+    <status>success</status>
+    <ts>1673622594089</ts>
+    <gtype>FT</gtype>
+    <datelist>
+        <date_0>
+            <month>JAN</month>
+            <date>13</date>
+            <week>FRI</week>
+        </date_0>
+        <date_1>
+            <month>JAN</month>
+            <date>14</date>
+            <week>SAT</week>
+        </date_1>
+        <date_2>
+            <month>JAN</month>
+            <date>15</date>
+            <week>SUN</week>
+        </date_2>
+        <date_3>
+            <month>JAN</month>
+            <date>16</date>
+            <week>MON</week>
+        </date_3>
+        <date_4>
+            <month>JAN</month>
+            <date>17</date>
+            <week>TUE</week>
+        </date_4>
+        <date_5>
+            <month>JAN</month>
+            <date>18</date>
+            <week>WED</week>
+        </date_5>
+        <date_6>
+            <month>JAN</month>
+            <date>19</date>
+            <week>THU</week>
+        </date_6>
+        <date_7>
+            <month>JAN</month>
+            <date>20</date>
+            <week>FRI</week>
+        </date_7>
+    </datelist>
+    <coupons>
+        <coupon_sw>Y</coupon_sw>
+        <coupon id='1'>
+            <name>Today's Matches</name>
+            <lid>
+                102529,102907,100448,101743,100064,100807,100030,103166,100021,100026,107901,100111,100038,100116,100173,106142,107198,101916,101320,103633,108445,108943,101811,100047,109364,103484,108941,101322,100816,109191,100277,100078,100265,100123,102814,108473,109198,100899,108688,104332</lid>
+            <field>cp1</field>
+        </coupon>
+        <coupon id='2'>
+            <name>Top European Leagues</name>
+            <lid>100030,100021,100026</lid>
+            <field>HotGame_FT_lid_1</field>
+        </coupon>
+        <coupon id='3'>
+            <name>Top North America Matches</name>
+            <lid>100277</lid>
+            <field>HotGame_FT_lid_5</field>
+        </coupon>
+        <coupon id='4'>
+            <name>Top Africa &#38; Middle East Matches</name>
+            <lid>101916,101322</lid>
+            <field>HotGame_FT_lid_6</field>
+        </coupon>
+    </coupons>
+    <classifier>
+        <classifier_sw>Y</classifier_sw>
+        <region name='England' id='120' t_sort='England' sort_name='011' sorttype='sort'
+            flag_class='icon_flag flag_GB_ENG'>
+            <league name='English Premier League' id='100021' t_sort='10800' grp='1'
+                sort_name='English Premier League'></league>
+            <league name='English FA Trophy' id='100807' t_sort='15000' grp='8'
+                sort_name='English FA Trophy'></league>
+            <league name='English Premier League U21 Division 1' id='106142' t_sort='15300' grp='5'
+                sort_name='English Premier League U21 Division 1'></league>
+            <league name='English Premier League U21 Division 2' id='107198' t_sort='15310' grp='5'
+                sort_name='English Premier League U21 Division 2'></league>
+        </region>
+        <region name='Spain' id='34' t_sort='Spain' sort_name='012' sorttype='sort'
+            flag_class='icon_flag flag_ES'>
+            <league name='Spain Primera Division' id='100030' t_sort='10910' grp='1'
+                sort_name='Spain Primera Division'></league>
+            <league name='Spain Segunda Division' id='100064' t_sort='12045' grp='3'
+                sort_name='Spain Segunda Division'></league>
+            <league name='Spain Tercera Federacion' id='103484' t_sort='15800' grp='10'
+                sort_name='Spain Tercera Federacion'></league>
+        </region>
+        <region name='Germany' id='30' t_sort='Germany' sort_name='013' sorttype='sort'
+            flag_class='icon_flag flag_DE'>
+            <league name='Germany 3rd Liga' id='102529' t_sort='14003' grp='4'
+                sort_name='Germany 3rd Liga'></league>
+        </region>
+        <region name='Italy' id='53' t_sort='Italy' sort_name='014' sorttype='sort'
+            flag_class='icon_flag flag_IT'>
+            <league name='Italy Serie A' id='100026' t_sort='10930' grp='1'
+                sort_name='Italy Serie A'></league>
+        </region>
+        <region name='Brazil' id='17' t_sort='Brazil' sort_name='034' sorttype='sort'
+            flag_class='icon_flag flag_BR'>
+            <league name='Copa Sao Paulo Junior U20' id='104332' t_sort='19000' grp='9'
+                sort_name='Copa Sao Paulo Junior U20'></league>
+        </region>
+        <region name='Belgium' id='14' t_sort='Belgium' sort_name='Belgium' sorttype='name'
+            flag_class='icon_flag flag_BE'>
+            <league name='Belgium First Division A' id='100111' t_sort='12005' grp='3'
+                sort_name='Belgium First Division A'></league>
+            <league name='Belgium Women Super League' id='107901' t_sort='18000' grp='9'
+                sort_name='Belgium Women Super League'></league>
+        </region>
+        <region name='Costa Rica' id='23' t_sort='Costa Rica' sort_name='Costa Rica' sorttype='name'
+            flag_class='icon_flag flag_CR'>
+            <league name='Costa Rica Liga De Ascenso' id='109198' t_sort='18000' grp='9'
+                sort_name='Costa Rica Liga De Ascenso'></league>
+        </region>
+        <region name='Cyprus' id='24' t_sort='Cyprus' sort_name='Cyprus' sorttype='name'
+            flag_class='icon_flag flag_CY'>
+            <league name='Cyprus Division 1' id='100116' t_sort='15500' grp='5'
+                sort_name='Cyprus Division 1'></league>
+        </region>
+        <region name='Egypt' id='32' t_sort='Egypt' sort_name='Egypt' sorttype='name'
+            flag_class='icon_flag flag_EG'>
+            <league name='Egypt Premier League' id='101322' t_sort='14010' grp='7'
+                sort_name='Egypt Premier League'></league>
+        </region>
+        <region name='Fantasy Matches' id='1374' t_sort='Fantasy Matches'
+            sort_name='Fantasy Matches' sorttype='name' flag_class='icon_flag '>
+            <league name='Fantasy Matches' id='108688' t_sort='50001' grp='9'
+                sort_name='Fantasy Matches'></league>
+        </region>
+        <region name='France' id='36' t_sort='France' sort_name='France' sorttype='name'
+            flag_class='icon_flag flag_FR'>
+            <league name='France Ligue 2' id='100078' t_sort='13050' grp='8'
+                sort_name='France Ligue 2'></league>
+            <league name='France Championnat National' id='100448' t_sort='15000' grp='5'
+                sort_name='France Championnat National'></league>
+            <league name='France Women Division 1' id='101320' t_sort='15800' grp='9'
+                sort_name='France Women Division 1'></league>
+        </region>
+        <region name='Iceland' id='46' t_sort='Iceland' sort_name='Iceland' sorttype='name'
+            flag_class='icon_flag flag_IS'>
+            <league name='Iceland Women League Cup' id='103633' t_sort='18100' grp='9'
+                sort_name='Iceland Women League Cup'></league>
+        </region>
+        <region name='International' id='130' t_sort='International' sort_name='International'
+            sorttype='name' flag_class='icon_flag flag_INT'>
+            <league name='Africa Nations Championship 2022 (In Algeria)' id='102907' t_sort='15000'
+                grp='8' sort_name='Africa Nations Championship 2022 (In Algeria)'></league>
+        </region>
+        <region name='Mexico' id='72' t_sort='Mexico' sort_name='Mexico' sorttype='name'
+            flag_class='icon_flag flag_MX'>
+            <league name='Mexico Liga MX' id='100277' t_sort='16500' grp='7'
+                sort_name='Mexico Liga MX'></league>
+            <league name='Mexico Liga Premier Serie A' id='108445' t_sort='17100' grp='9'
+                sort_name='Mexico Liga Premier Serie A'></league>
+            <league name='Mexico Liga Expansion MX' id='103166' t_sort='18500' grp='8'
+                sort_name='Mexico Liga Expansion MX'></league>
+            <league name='Mexico Liga MX Women' id='108943' t_sort='18600' grp='9'
+                sort_name='Mexico Liga MX Women'></league>
+        </region>
+        <region name='Morocco' id='77' t_sort='Morocco' sort_name='Morocco' sorttype='name'
+            flag_class='icon_flag flag_MA'>
+            <league name='Morocco Botola Pro' id='102814' t_sort='15800' grp='9'
+                sort_name='Morocco Botola Pro'></league>
+        </region>
+        <region name='Netherlands' id='79' t_sort='Netherlands' sort_name='Netherlands'
+            sorttype='name' flag_class='icon_flag flag_NL'>
+            <league name='Netherlands Eerste Divisie' id='100265' t_sort='13010' grp='8'
+                sort_name='Netherlands Eerste Divisie'></league>
+        </region>
+        <region name='Northern Ireland' id='121' t_sort='Northern Ireland'
+            sort_name='Northern Ireland' sorttype='name' flag_class='icon_flag flag_GB_NIR'>
+            <league name='Northern Ireland Premiership' id='101811' t_sort='15100' grp='10'
+                sort_name='Northern Ireland Premiership'></league>
+        </region>
+        <region name='Portugal' id='92' t_sort='Portugal' sort_name='Portugal' sorttype='name'
+            flag_class='icon_flag flag_PT'>
+            <league name='Portugal Primeira Liga' id='100173' t_sort='12010' grp='3'
+                sort_name='Portugal Primeira Liga'></league>
+            <league name='Portugal Liga 2' id='100047' t_sort='15000' grp='4'
+                sort_name='Portugal Liga 2'></league>
+            <league name='Portugal Liga 3' id='109364' t_sort='15800' grp='9'
+                sort_name='Portugal Liga 3'></league>
+        </region>
+        <region name='Republic of Ireland' id='51' t_sort='Republic of Ireland'
+            sort_name='Republic of Ireland' sorttype='name' flag_class='icon_flag flag_IE'>
+            <league name='Ireland Leinster Senior League Senior Division' id='108473' t_sort='15800'
+                grp='9' sort_name='Ireland Leinster Senior League Senior Division'></league>
+        </region>
+        <region name='Scotland' id='122' t_sort='Scotland' sort_name='Scotland' sorttype='name'
+            flag_class='icon_flag flag_GB_SCT'>
+            <league name='Scotland Premiership' id='100038' t_sort='12008' grp='7'
+                sort_name='Scotland Premiership'></league>
+        </region>
+        <region name='South Africa' id='117' t_sort='South Africa' sort_name='South Africa'
+            sorttype='name' flag_class='icon_flag flag_ZA'>
+            <league name='South Africa Premiership' id='101916' t_sort='15800' grp='9'
+                sort_name='South Africa Premiership'></league>
+        </region>
+        <region name='Turkey' id='109' t_sort='Turkey' sort_name='Turkey' sorttype='name'
+            flag_class='icon_flag flag_TR'>
+            <league name='Turkey Super League' id='100123' t_sort='12020' grp='7'
+                sort_name='Turkey Super League'></league>
+            <league name='Turkey TFF First League' id='101743' t_sort='15100' grp='6'
+                sort_name='Turkey TFF First League'></league>
+        </region>
+        <region name='Wales' id='123' t_sort='Wales' sort_name='Wales' sorttype='name'
+            flag_class='icon_flag flag_GB_WLS'>
+            <league name='Wales Championship' id='108941' t_sort='15800' grp='9'
+                sort_name='Wales Championship'></league>
+        </region>
+        <region name='World' id='128' t_sort='World' sort_name='World' sorttype='name'
+            flag_class='icon_flag flag_WO'>
+            <league name='Club Friendlies' id='109191' t_sort='13400' grp='7'
+                sort_name='Club Friendlies'></league>
+            <league name='Club Friendly' id='100816' t_sort='14500' grp='6'
+                sort_name='Club Friendly'></league>
+            <league name='Club Friendly Women' id='100899' t_sort='15400' grp='9'
+                sort_name='Club Friendly Women'></league>
+        </region>
+    </classifier>
+    <classifier_debug></classifier_debug>
+    <coupon_debug></coupon_debug>
+</serverresponse>

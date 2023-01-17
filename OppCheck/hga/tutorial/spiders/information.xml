@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<serverresponse sip='4.137'>
+    <dataCount>3</dataCount>
+    <totalDataCount>3</totalDataCount>
+    <pageCount>1</pageCount>
+    <ec id="ec6593016" hasEC="Y">
+        <game id="5834205">
+            <GID>5834205</GID>
+            <DATETIME>01-13 04:00p</DATETIME>
+            <RUNNING>Y</RUNNING>
+            <LEAGUE>English Premier League</LEAGUE>
+            <GNUM_H>50218</GNUM_H>
+            <GNUM_C>50217</GNUM_C>
+            <TEAM_H>Aston Villa</TEAM_H>
+            <TEAM_C>Leeds United</TEAM_C>
+            <TEAM_H_ID>101733</TEAM_H_ID>
+            <TEAM_C_ID>101573</TEAM_C_ID>
+            <STRONG>H</STRONG>
+            <RATIO_R>0.5</RATIO_R>
+            <IOR_RH>1.030</IOR_RH>
+            <IOR_RC>0.890</IOR_RC>
+            <RATIO_OUO>O2.5 / 3</RATIO_OUO>
+            <RATIO_OUU>U2.5 / 3</RATIO_OUU>
+            <IOR_OUH>0.840</IOR_OUH>
+            <IOR_OUC>1.080</IOR_OUC>
+            <IOR_MH>2.02</IOR_MH>
+            <IOR_MC>3.65</IOR_MC>
+            <IOR_MN>3.65</IOR_MN>
+            <STR_ODD>o</STR_ODD>
+            <STR_EVEN>e</STR_EVEN>
+            <IOR_EOO>2.01</IOR_EOO>
+            <IOR_EOE>1.89</IOR_EOE>
+            <HGID>5834206</HGID>
+            <HSTRONG>H</HSTRONG>
+            <RATIO_HR>0 / 0.5</RATIO_HR>
+            <IOR_HRH>1.080</IOR_HRH>
+            <IOR_HRC>0.830</IOR_HRC>
+            <RATIO_HOUO>O1</RATIO_HOUO>
+            <RATIO_HOUU>U1</RATIO_HOUU>
+            <IOR_HOUH>1.100</IOR_HOUH>
+            <IOR_HOUC>0.800</IOR_HOUC>
+            <IOR_HMH>2.55</IOR_HMH>
+            <IOR_HMC>4.05</IOR_HMC>
+            <IOR_HMN>2.25</IOR_HMN>
+            <MORE_COUNT>78</MORE_COUNT>
+            <EVENTID></EVENTID>
+            <HOT></HOT>
+            <CENTER_TV></CENTER_TV>
+            <PLAY>N</PLAY>
+            <GIDM>4681224</GIDM>
+            <ISMASTER>Y</ISMASTER>
+            <HIDE_N>N</HIDE_N>
+            <OBT_TYPE>0</OBT_TYPE>
+            <PTYPE_MAP>0</PTYPE_MAP>
+            <PTYPE></PTYPE>
+            <IMPORTANT>N</IMPORTANT>
+            <ECID>6593016</ECID>
+            <NOW_MODEL>HT</NOW_MODEL>
+            <IOR_TSY>1.68</IOR_TSY>
+            <IOR_TSN>2.2</IOR_TSN>
+            <FLAG_CLASS>flag_GB_ENG</FLAG_CLASS>
+            <MT>br</MT>
+            <MT_ID>34152065</MT_ID>
+            <MT_GTYPE>FT</MT_GTYPE>
+            <MT_SPID>1</MT_SPID>
+            <MT_LINEUPS>Y</MT_LINEUPS>
+            <LID>100021</LID>
+            <ISFANTASY>N</ISFANTASY>
+            <TV_WEB_SW>N</TV_WEB_SW>
+            <TV_PH_SW>N</TV_PH_SW>
+            <PFCOLOR_H>A52A2A</PFCOLOR_H>
+            <PFCOLOR_C>FFFFFF</PFCOLOR_C>
+            <FANTASY_DATA></FANTASY_DATA>
+            <R_COUNT>4</R_COUNT>
+            <OU_COUNT>4</OU_COUNT>
+            <CN_COUNT>1</CN_COUNT>
+            <RN_COUNT>1</RN_COUNT>
+            <WI_COUNT>0</WI_COUNT>
+            <ET_COUNT>0</ET_COUNT>
+            <PK_COUNT>0</PK_COUNT>
+            <MORE>96</MORE>
+            <SYSTIME>2023-01-13 14:05:08</SYSTIME>
+        </game>
+    </ec>
+    <ec id="ec6595312" hasEC="Y">
+        <game id="5830351">
+            <GID>5830351</GID>
+            <DATETIME>01-13 04:00p</DATETIME>
+            <RUNNING>Y</RUNNING>
+            <LEAGUE>Spain Primera Division</LEAGUE>
+            <GNUM_H>50254</GNUM_H>
+            <GNUM_C>50253</GNUM_C>
+            <TEAM_H>Celta Vigo</TEAM_H>
+            <TEAM_C>Villarreal</TEAM_C>
+            <TEAM_H_ID>101448</TEAM_H_ID>
+            <TEAM_C_ID>102103</TEAM_C_ID>
+            <STRONG>C</STRONG>
+            <RATIO_R>0</RATIO_R>
+            <IOR_RH>1.050</IOR_RH>
+            <IOR_RC>0.870</IOR_RC>
+            <RATIO_OUO>O2 / 2.5</RATIO_OUO>
+            <RATIO_OUU>U2 / 2.5</RATIO_OUU>
+            <IOR_OUH>1.040</IOR_OUH>
+            <IOR_OUC>0.880</IOR_OUC>
+            <IOR_MH>2.85</IOR_MH>
+            <IOR_MC>2.63</IOR_MC>
+            <IOR_MN>3.20</IOR_MN>
+            <STR_ODD>o</STR_ODD>
+            <STR_EVEN>e</STR_EVEN>
+            <IOR_EOO>1.98</IOR_EOO>
+            <IOR_EOE>1.92</IOR_EOE>
+            <HGID>5830352</HGID>
+            <HSTRONG>C</HSTRONG>
+            <RATIO_HR>0</RATIO_HR>
+            <IOR_HRH>1.030</IOR_HRH>
+            <IOR_HRC>0.880</IOR_HRC>
+            <RATIO_HOUO>O1</RATIO_HOUO>
+            <RATIO_HOUU>U1</RATIO_HOUU>
+            <IOR_HOUH>0.790</IOR_HOUH>
+            <IOR_HOUC>1.110</IOR_HOUC>
+            <IOR_HMH>3.55</IOR_HMH>
+            <IOR_HMC>3.30</IOR_HMC>
+            <IOR_HMN>2.01</IOR_HMN>
+            <MORE_COUNT>78</MORE_COUNT>
+            <EVENTID>
+                8CB6CBBCB9CCBAB6CECCBDB6C6C6CFC7C6C6C9C7C9C6CCC6CCC6CFC6CAC7CACCBAB7C8C6CDBCBEB6CEB7CEB7CDB6CDC6CDC6CCB6C387CBC8CCC7C9CBCBA9B3</EVENTID>
+            <HOT></HOT>
+            <CENTER_TV>perform</CENTER_TV>
+            <PLAY>N</PLAY>
+            <GIDM>4683748</GIDM>
+            <ISMASTER>Y</ISMASTER>
+            <HIDE_N>N</HIDE_N>
+            <OBT_TYPE>0</OBT_TYPE>
+            <PTYPE_MAP>0</PTYPE_MAP>
+            <PTYPE></PTYPE>
+            <IMPORTANT>N</IMPORTANT>
+            <ECID>6595312</ECID>
+            <NOW_MODEL>HT</NOW_MODEL>
+            <IOR_TSY>1.78</IOR_TSY>
+            <IOR_TSN>2.05</IOR_TSN>
+            <FLAG_CLASS>flag_ES</FLAG_CLASS>
+            <MT>br</MT>
+            <MT_ID>34277519</MT_ID>
+            <MT_GTYPE>FT</MT_GTYPE>
+            <MT_SPID>1</MT_SPID>
+            <MT_LINEUPS>Y</MT_LINEUPS>
+            <LID>100030</LID>
+            <ISFANTASY>N</ISFANTASY>
+            <TV_WEB_SW>Y</TV_WEB_SW>
+            <TV_PH_SW>Y</TV_PH_SW>
+            <PFCOLOR_H>33CCCC</PFCOLOR_H>
+            <PFCOLOR_C>FFFF00</PFCOLOR_C>
+            <FANTASY_DATA></FANTASY_DATA>
+            <R_COUNT>4</R_COUNT>
+            <OU_COUNT>4</OU_COUNT>
+            <CN_COUNT>1</CN_COUNT>
+            <RN_COUNT>1</RN_COUNT>
+            <WI_COUNT>0</WI_COUNT>
+            <ET_COUNT>0</ET_COUNT>
+            <PK_COUNT>0</PK_COUNT>
+            <MORE>96</MORE>
+            <SYSTIME>2023-01-13 14:05:08</SYSTIME>
+        </game>
+    </ec>
+    <ec id="ec6593007" hasEC="Y">
+        <game id="5834839">
+            <GID>5834839</GID>
+            <DATETIME>01-13 03:45p</DATETIME>
+            <RUNNING>Y</RUNNING>
+            <LEAGUE>Italy Serie A</LEAGUE>
+            <GNUM_H>50200</GNUM_H>
+            <GNUM_C>50199</GNUM_C>
+            <TEAM_H>Napoli</TEAM_H>
+            <TEAM_C>Juventus</TEAM_C>
+            <TEAM_H_ID>122770</TEAM_H_ID>
+            <TEAM_C_ID>127407</TEAM_C_ID>
+            <STRONG>H</STRONG>
+            <RATIO_R>0.5</RATIO_R>
+            <IOR_RH>1.070</IOR_RH>
+            <IOR_RC>0.850</IOR_RC>
+            <RATIO_OUO>O2 / 2.5</RATIO_OUO>
+            <RATIO_OUU>U2 / 2.5</RATIO_OUU>
+            <IOR_OUH>1.090</IOR_OUH>
+            <IOR_OUC>0.830</IOR_OUC>
+            <IOR_MH>2.06</IOR_MH>
+            <IOR_MC>3.85</IOR_MC>
+            <IOR_MN>3.40</IOR_MN>
+            <STR_ODD>o</STR_ODD>
+            <STR_EVEN>e</STR_EVEN>
+            <IOR_EOO>2.0</IOR_EOO>
+            <IOR_EOE>1.9</IOR_EOE>
+            <HGID>5834840</HGID>
+            <HSTRONG>H</HSTRONG>
+            <RATIO_HR>0 / 0.5</RATIO_HR>
+            <IOR_HRH>1.150</IOR_HRH>
+            <IOR_HRC>0.760</IOR_HRC>
+            <RATIO_HOUO>O1</RATIO_HOUO>
+            <RATIO_HOUU>U1</RATIO_HOUU>
+            <IOR_HOUH>0.820</IOR_HOUH>
+            <IOR_HOUC>1.080</IOR_HOUC>
+            <IOR_HMH>2.72</IOR_HMH>
+            <IOR_HMC>4.25</IOR_HMC>
+            <IOR_HMN>2.08</IOR_HMN>
+            <MORE_COUNT>78</MORE_COUNT>
+            <EVENTID>
+                8BB7C8CCBCBCBAB7CABCB7C6CCB7CAB7C9B7CACCBCBCBDB6CDC6CAB6CAB6CFCCBAB6CEC7CDB6CACCBEBCB6C6CCB6C7CCB9CCBCB6C38ACECDCEC7C9CBCBA9B3</EVENTID>
+            <HOT></HOT>
+            <CENTER_TV>perform</CENTER_TV>
+            <PLAY>N</PLAY>
+            <GIDM>4681215</GIDM>
+            <ISMASTER>Y</ISMASTER>
+            <HIDE_N>N</HIDE_N>
+            <OBT_TYPE>0</OBT_TYPE>
+            <PTYPE_MAP>0</PTYPE_MAP>
+            <PTYPE></PTYPE>
+            <IMPORTANT>N</IMPORTANT>
+            <ECID>6593007</ECID>
+            <NOW_MODEL>HT</NOW_MODEL>
+            <IOR_TSY>1.81</IOR_TSY>
+            <IOR_TSN>2.01</IOR_TSN>
+            <FLAG_CLASS>flag_IT</FLAG_CLASS>
+            <MT>br</MT>
+            <MT_ID>34286863</MT_ID>
+            <MT_GTYPE>FT</MT_GTYPE>
+            <MT_SPID>1</MT_SPID>
+            <MT_LINEUPS>Y</MT_LINEUPS>
+            <LID>100026</LID>
+            <ISFANTASY>N</ISFANTASY>
+            <TV_WEB_SW>Y</TV_WEB_SW>
+            <TV_PH_SW>Y</TV_PH_SW>
+            <PFCOLOR_H>56A5EC</PFCOLOR_H>
+            <PFCOLOR_C>FFFFFF</PFCOLOR_C>
+            <FANTASY_DATA></FANTASY_DATA>
+            <R_COUNT>4</R_COUNT>
+            <OU_COUNT>4</OU_COUNT>
+            <CN_COUNT>1</CN_COUNT>
+            <RN_COUNT>1</RN_COUNT>
+            <WI_COUNT>0</WI_COUNT>
+            <ET_COUNT>0</ET_COUNT>
+            <PK_COUNT>0</PK_COUNT>
+            <MORE>96</MORE>
+            <SYSTIME>2023-01-13 14:05:08</SYSTIME>
+        </game>
+    </ec>
+    <ts>1673632951689</ts>
+    <mygame_rtype>r</mygame_rtype>
+    <system_time>2023-01-13 14:05:08</system_time>
+    <nowShowtype>today</nowShowtype>
+</serverresponse>
