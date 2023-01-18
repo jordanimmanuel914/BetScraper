@@ -81,7 +81,7 @@ typedef struct state_struct {
 string gs_strLastResponse;
 vector<match_inf *> g_matches;
 int g_updated = 0;
-
+int g_nFilter = 4;
 class CAboutDlg : public CDialogEx
 {
 public:
@@ -131,6 +131,7 @@ void COppCheckDlg::DoDataExchange(CDataExchange* pDX)
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_LST_ORG, m_org);
 	DDX_Control(pDX, IDC_PROGRESS1, m_show);
+	DDX_Control(pDX, IDC_EDIT_FILTER, m_filteredit);
 }
 
 BEGIN_MESSAGE_MAP(COppCheckDlg, CDialogEx)
@@ -177,6 +178,13 @@ BOOL COppCheckDlg::OnInitDialog()
 	m_hcatch = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)catch_thread, this, 0, &dwThreadId);
 	m_hdisplay = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)display_thread, this, 0, &dwThreadId);
 	Initlist();
+
+	CFont myFont;
+	myFont.CreateFont(20, 0, 0, 0, FW_HEAVY, true, false,
+		0, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+		FIXED_PITCH | FF_MODERN, _T("Courier New"));
+
+	m_filteredit.SetFont(&myFont);
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
 float COppCheckDlg::get_profit(float odd, float myhandicap, float money, int mygoal, int op_goal) {
@@ -396,11 +404,11 @@ float COppCheckDlg::calc_middle(float stake1, float stake2, float odd1, float od
 		tmp = 0;
 		for (i = 0; i < idx; i++) {
 			if (values[i] > 0) {
-				tmp1 = values[i] / fabs(favg);
+				tmp1 = values[i] / fabs(favg)+1;
 				tmp+= tmp1;
 			}
 		}
-		return tmp + 1;
+		return tmp;
 	}
 	for (i = 0; i < idx; i++) {
 		if (values[i] > 0) {
@@ -483,11 +491,11 @@ float COppCheckDlg::calc_middle_ou(float stake1, float stake2, float odd1, float
 		tmp = 0;
 		for (i = 0; i < idx; i++) {
 			if (values[i] > 0) {
-				tmp1 = values[i] / fabs(favg);
+				tmp1 = values[i] / fabs(favg)+1;
 				tmp += tmp1;
 			}
 		}
-		return tmp + 1;
+		return tmp;
 	}
 	for (i = 0; i < idx; i++) {
 		if (values[i] > 0) {
@@ -501,6 +509,9 @@ float COppCheckDlg::checkArbitrage(float odd1, float odd2) {
 	float x = 100;
 	float xx = (odd1 * x) / (odd1 + odd2);
 	return xx * odd2 - x;
+	float x1 = 1.0 / odd1;
+	float y1 = 1.0 / odd2;
+	return 1.0 - (x1 + y1);
 }
 float COppCheckDlg::checkArbitrage3(float a1, float a2, float a3) {
 	float y = a3 * 100 / (a2 + a3 + (a2*a3 / a1));
@@ -795,12 +806,19 @@ void COppCheckDlg::ReadDataDisplay()
 	int nstart_time = GetTickCount();
 	m_show.SetRange(0, nhga - 1);
 	for (i = 0; i < nhga; i++) {
+		m_show.SetPos(i);
+
 		string sdatetime = hga[i]["DATETIME"].GetString();
 		string sleaguename = hga[i]["LEAGUE"].IsNull() ? "null" : hga[i]["LEAGUE"].GetString();
+		if (sleaguename.find("Fantasy Matches") != string::npos) {
+			continue;
+		}
 		string shometeam = hga[i]["TEAM_H"].IsNull() ? "null" : hga[i]["TEAM_H"].GetString();
+
 		string sawayteam = hga[i]["TEAM_C"].IsNull() ? "null" : hga[i]["TEAM_C"].GetString();
-		string sstrong = hga[i]["STRONG"].IsNull() ? "null" : hga[i]["STRONG"].GetString();
+		
 		const Value& main_data = hga[i]["MAIN_DATA"];
+		string sstrong = main_data["STRONG"].IsNull() ? "null" : main_data["STRONG"].GetString();
 		string shandicap = main_data["RATIO_R"].IsNull() ? "null" : main_data["RATIO_R"].GetString();
 		string shodd = main_data["IOR_RH"].IsNull() ? "null" : main_data["IOR_RH"].GetString();
 		string scodd = main_data["IOR_RC"].IsNull() ? "null" : main_data["IOR_RC"].GetString();
@@ -872,7 +890,7 @@ void COppCheckDlg::ReadDataDisplay()
 				////////////////////////////////////////////////////////////////////////////////////////////////
 				string bodd1, bodd2, bhandicap1, bhandicap2;
 				float bhandi1, bhandi2, hhandi1, hhandi2, bfodd1, bfodd2, hfodd1, hfodd2;
-
+				float v1, v2, o1, o2;
 				if (sp.HasMember("asian_handicap")) {
 					bodd1 = sp["asian_handicap"]["odds"][0]["odds"].GetString();
 					bodd2 = sp["asian_handicap"]["odds"][1]["odds"].GetString();
@@ -881,7 +899,7 @@ void COppCheckDlg::ReadDataDisplay()
 					bhandi1 = get_handicap_from_string(bhandicap1.c_str());
 					bhandi2 = get_handicap_from_string(bhandicap2.c_str());
 
-					hhandi1 = atof(shandicap.c_str());
+					hhandi1 = get_handicap_from_string(shandicap.c_str(), '/');
 					hhandi2 = -hhandi1;
 
 					bfodd1 = atof(bodd1.c_str());
@@ -903,23 +921,44 @@ void COppCheckDlg::ReadDataDisplay()
 						pmatch->arinf[0].h2_odd1 = hfodd1;
 						pmatch->arinf[0].h2_odd2 = bfodd2;
 					}
-
-					stake1 = 100; stake2 = stake1 * bfodd1 / hfodd2;
-					h1 = calc_middle(stake1, stake2, bfodd1, hfodd2, bhandi1, hhandi2);
-					pmatch->inf[0][pmatch->mcnt[0]].middle = h1;
-					pmatch->inf[0][pmatch->mcnt[0]].handi1 = bhandi1;
-					pmatch->inf[0][pmatch->mcnt[0]].handi2 = hhandi2;;
-					pmatch->inf[0][pmatch->mcnt[0]].odd1 = bfodd1;
-					pmatch->inf[0][pmatch->mcnt[0]++].odd2 = hfodd2;
-
-					stake1 = 100; stake2 = stake1 * hfodd1 / bfodd2;
-					h2 = calc_middle(stake1, stake2, hfodd1, bfodd2, hhandi1, bhandi2);
-					pmatch->inf[0][pmatch->mcnt[0]].middle = h2;
-					pmatch->inf[0][pmatch->mcnt[0]].handi1 = hhandi1;
-					pmatch->inf[0][pmatch->mcnt[0]].handi2 = bhandi2;;
-					pmatch->inf[0][pmatch->mcnt[0]].odd1 = hfodd1;
-					pmatch->inf[0][pmatch->mcnt[0]++].odd2 = bfodd2;
-
+					else {
+						if (fabs(bhandi1) - fabs(hhandi1) < 0) {
+							//This means hga offer high value.
+							if (hhandi1 > 0) {
+								v1 = hhandi1;
+								o1 = hfodd1;
+								v2 = bhandi2;
+								o2 = bfodd2;
+							}
+							else {
+								v1 = hhandi2;
+								o1 = hfodd2;
+								v2 = bhandi1;
+								o2 = bfodd1;
+							}
+						}
+						else {
+							if (bhandi1 > 0) {
+								v1 = bhandi1;
+								o1 = bfodd1;
+								v2 = hhandi2;
+								o2 = hfodd2;
+							}
+							else {
+								v1 = bhandi2;
+								o1 = bfodd2;
+								v2 = hhandi1;
+								o2 = hfodd1;
+							}
+						}
+						stake1 = 100; stake2 = stake1 * o1 / o2;
+						h1 = calc_middle(stake1, stake2, o1, o2, v1, v2);
+						pmatch->inf[0][pmatch->mcnt[0]].middle = h1;
+						pmatch->inf[0][pmatch->mcnt[0]].handi1 = v1;
+						pmatch->inf[0][pmatch->mcnt[0]].handi2 = v2;;
+						pmatch->inf[0][pmatch->mcnt[0]].odd1 = o1;
+						pmatch->inf[0][pmatch->mcnt[0]++].odd2 = o2;
+					}
 					//User alternative lines to calc middling.
 					if (odds["results"][0].HasMember("others")) {
 						const Value &others = odds["results"][0]["others"];
@@ -936,25 +975,50 @@ void COppCheckDlg::ReadDataDisplay()
 									string ahandicap = aoddes[k]["handicap"].GetString();
 									float ahandi = get_handicap_from_string(ahandicap.c_str());
 									if (ah == 1) {
-										stake1 = 100; stake2 = stake1 * aodd / hfodd2;
-										h1 = calc_middle(stake1, stake2, aodd, hfodd2, ahandi, hhandi2);
-										pmatch->inf[0][pmatch->mcnt[0]].middle = h1;
-										pmatch->inf[0][pmatch->mcnt[0]].handi1 = ahandi;
-										pmatch->inf[0][pmatch->mcnt[0]].handi2 = hhandi2;;
-										pmatch->inf[0][pmatch->mcnt[0]].odd1 = aodd;
-										pmatch->inf[0][pmatch->mcnt[0]].nalt = 1;
-										pmatch->inf[0][pmatch->mcnt[0]++].odd2 = hfodd2;
+										if (hhandi2 >= 0) {
+											if(fabs(ahandi) > hhandi2 || ahandi > 0)
+												continue;
+											v1 = hhandi2;
+											o1 = hfodd2;
+											v2 = ahandi;
+											o2 = aodd;
+										}
+										else {
+											if (ahandi < fabs(hhandi2) || ahandi < 0)
+												continue;
+											v1 = ahandi;
+											o1 = aodd;
+											v2 = hhandi2;
+											o2 = hfodd2;
+										}
 									}
-									else {
-										stake1 = 100; stake2 = stake1 * hfodd1 / aodd;
-										h1 = calc_middle(stake1, stake2, hfodd1, aodd, hhandi1, ahandi);
-										pmatch->inf[0][pmatch->mcnt[0]].middle = h1;
-										pmatch->inf[0][pmatch->mcnt[0]].handi1 = hhandi1;
-										pmatch->inf[0][pmatch->mcnt[0]].handi2 = ahandi;;
-										pmatch->inf[0][pmatch->mcnt[0]].odd1 = hfodd1;
-										pmatch->inf[0][pmatch->mcnt[0]].nalt = 1;
-										pmatch->inf[0][pmatch->mcnt[0]++].odd2 = aodd;
+									else if(ah==2){
+										if (hhandi1 <= 0) {
+											if (ahandi < fabs(hhandi1) || ahandi < 0)
+												continue;
+											v1 = ahandi;
+											o1 = aodd;
+											v2 = hhandi1;
+											o2 = hfodd1;
+										}
+										else {
+											if (fabs(ahandi) > hhandi1 || ahandi > 0)
+												continue;
+											v1 = hhandi1;
+											o1 = hfodd1;
+											v2 = ahandi;
+											o2 = aodd;
+										}
 									}
+									
+									stake1 = 100; stake2 = stake1 * o1 / o2;
+									h1 = calc_middle(stake1, stake2, o1, o2, v1, v2);
+									pmatch->inf[0][pmatch->mcnt[0]].middle = h1;
+									pmatch->inf[0][pmatch->mcnt[0]].handi1 = v1;
+									pmatch->inf[0][pmatch->mcnt[0]].handi2 = v2;;
+									pmatch->inf[0][pmatch->mcnt[0]].odd1 = o1;
+									pmatch->inf[0][pmatch->mcnt[0]].nalt = 1;
+									pmatch->inf[0][pmatch->mcnt[0]++].odd2 = o2;
 								}
 								break;
 							}
@@ -990,22 +1054,28 @@ void COppCheckDlg::ReadDataDisplay()
 						pmatch->arinf[1].h2_odd1 = hfodd1;
 						pmatch->arinf[1].h2_odd2 = bfodd2;
 					}
-
-					stake1 = 100; stake2 = stake1 * bfodd1 / hfodd2;
-					h1 = calc_middle_ou(stake1, stake2, bfodd1, hfodd2, bhandi1, hhandi2, 'o', 'u');
-					pmatch->inf[1][pmatch->mcnt[1]].middle = h1;
-					pmatch->inf[1][pmatch->mcnt[1]].handi1 = bhandi1;
-					pmatch->inf[1][pmatch->mcnt[1]].handi2 = hhandi2;;
-					pmatch->inf[1][pmatch->mcnt[1]].odd1 = bfodd1;
-					pmatch->inf[1][pmatch->mcnt[1]++].odd2 = hfodd2;
-
-					stake1 = 100; stake2 = stake1 * hfodd1 / bfodd2;
-					h2 = calc_middle_ou(stake1, stake2, hfodd1, bfodd2, hhandi1, bhandi2, 'o', 'u');
-					pmatch->inf[1][pmatch->mcnt[1]].middle = h2;
-					pmatch->inf[1][pmatch->mcnt[1]].handi1 = hhandi1;
-					pmatch->inf[1][pmatch->mcnt[1]].handi2 = bhandi2;;
-					pmatch->inf[1][pmatch->mcnt[1]].odd1 = hfodd1;
-					pmatch->inf[1][pmatch->mcnt[1]++].odd2 = bfodd2;
+					else {
+						if (bhandi1 < hhandi2) {
+							v1 = bhandi1;
+							o1 = bfodd1;
+							v2 = hhandi2;
+							o2 = hfodd2;
+						}
+						else {
+							v1 = hhandi1;
+							o1 = hfodd1;
+							v2 = bhandi2;
+							o2 = bfodd2;
+						}
+						stake1 = 100; stake2 = stake1 * o1 / o2;
+						h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+						pmatch->inf[1][pmatch->mcnt[1]].middle = h1;
+						pmatch->inf[1][pmatch->mcnt[1]].handi1 = v1;
+						pmatch->inf[1][pmatch->mcnt[1]].handi2 = v2;;
+						pmatch->inf[1][pmatch->mcnt[1]].odd1 = o1;
+						pmatch->inf[1][pmatch->mcnt[1]].nalt = 2;
+						pmatch->inf[1][pmatch->mcnt[1]++].odd2 = o2;
+					}
 					if (odds["results"][0].HasMember("others")) {
 						const Value &others = odds["results"][0]["others"];
 						ndiff = others.Size();
@@ -1020,25 +1090,33 @@ void COppCheckDlg::ReadDataDisplay()
 									string ahandicap = aoddes[k]["name"].GetString();
 									float ahandi = get_handicap_from_string(ahandicap.c_str());
 									if (aheader == "Over") {
-										stake1 = 100; stake2 = stake1 * aodd / hfodd2;
-										h1 = calc_middle_ou(stake1, stake2, aodd, hfodd2, ahandi, hhandi2, 'o', 'u');
-										pmatch->inf[1][pmatch->mcnt[1]].middle = h1;
-										pmatch->inf[1][pmatch->mcnt[1]].handi1 = ahandi;
-										pmatch->inf[1][pmatch->mcnt[1]].handi2 = hhandi2;;
-										pmatch->inf[1][pmatch->mcnt[1]].odd1 = aodd;
-										pmatch->inf[1][pmatch->mcnt[1]].odd2 = hfodd2;
-										pmatch->inf[1][pmatch->mcnt[1]++].nalt = 1;
+										if (ahandi < hhandi2) {
+											v1 = ahandi;
+											o1 = aodd;
+											v2 = hhandi2;
+											o2 = hfodd2;
+										}
+										else
+											continue;
 									}
 									else {
-										stake1 = 100; stake2 = stake1 * hfodd1 / aodd;
-										h1 = calc_middle_ou(stake1, stake2, hfodd1, aodd, hhandi1, ahandi, 'o', 'u');
-										pmatch->inf[1][pmatch->mcnt[1]].middle = h1;
-										pmatch->inf[1][pmatch->mcnt[1]].handi1 = hhandi1;
-										pmatch->inf[1][pmatch->mcnt[1]].handi2 = ahandi;;
-										pmatch->inf[1][pmatch->mcnt[1]].odd1 = hfodd1;
-										pmatch->inf[1][pmatch->mcnt[1]].odd2 = aodd;
-										pmatch->inf[1][pmatch->mcnt[1]++].nalt = 1;
+										if (ahandi > hhandi1) {
+											v1 = hhandi1;
+											o1 = hfodd1;
+											v2 = ahandi;
+											o2 = aodd;
+										}
+										else
+											continue;
 									}
+									stake1 = 100; stake2 = stake1 * o1 / o2;
+									h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+									pmatch->inf[1][pmatch->mcnt[1]].middle = h1;
+									pmatch->inf[1][pmatch->mcnt[1]].handi1 = v1;
+									pmatch->inf[1][pmatch->mcnt[1]].handi2 = v2;
+									pmatch->inf[1][pmatch->mcnt[1]].odd1 = o1;
+									pmatch->inf[1][pmatch->mcnt[1]].odd2 = o2;
+									pmatch->inf[1][pmatch->mcnt[1]++].nalt = 3;
 								}
 								break;
 							}
@@ -1056,7 +1134,7 @@ void COppCheckDlg::ReadDataDisplay()
 					bhandi1 = get_handicap_from_string(bhandicap1.c_str());
 					bhandi2 = get_handicap_from_string(bhandicap2.c_str());
 
-					hhandi1 = atof(s1sthandicap.c_str());
+					hhandi1 = get_handicap_from_string(s1sthandicap.c_str(),'/');
 					hhandi2 = -hhandi1;
 
 					bfodd1 = atof(bodd1.c_str());
@@ -1077,24 +1155,44 @@ void COppCheckDlg::ReadDataDisplay()
 						pmatch->arinf[2].h2_odd1 = hfodd1;
 						pmatch->arinf[2].h2_odd2 = bfodd2;
 					}
-
-					//Check Middling
-					stake1 = 100; stake2 = stake1 * bfodd1 / hfodd2;
-					h1 = calc_middle(stake1, stake2, bfodd1, hfodd2, bhandi1, hhandi2);
-					pmatch->inf[2][pmatch->mcnt[2]].middle = h1;
-					pmatch->inf[2][pmatch->mcnt[2]].handi1 = bhandi1;
-					pmatch->inf[2][pmatch->mcnt[2]].handi2 = hhandi2;;
-					pmatch->inf[2][pmatch->mcnt[2]].odd1 = bfodd1;
-					pmatch->inf[2][pmatch->mcnt[2]++].odd2 = hfodd2;
-
-					stake1 = 100; stake2 = stake1 * hfodd1 / bfodd2;
-					h2 = calc_middle(stake1, stake2, hfodd1, bfodd2, hhandi1, bhandi2);
-					pmatch->inf[2][pmatch->mcnt[2]].middle = h2;
-					pmatch->inf[2][pmatch->mcnt[2]].handi1 = hhandi1;
-					pmatch->inf[2][pmatch->mcnt[2]].handi2 = bhandi2;;
-					pmatch->inf[2][pmatch->mcnt[2]].odd1 = hfodd1;
-					pmatch->inf[2][pmatch->mcnt[2]++].odd2 = bfodd2;
-
+					else {
+						if (fabs(bhandi1) - fabs(hhandi1) < 0) {
+							//This means hga offer high value.
+							if (hhandi1 > 0) {
+								v1 = hhandi1;
+								o1 = hfodd1;
+								v2 = bhandi2;
+								o2 = bfodd2;
+							}
+							else {
+								v1 = hhandi2;
+								o1 = hfodd2;
+								v2 = bhandi1;
+								o2 = bfodd1;
+							}
+						}
+						else {
+							if (bhandi1 > 0) {
+								v1 = bhandi1;
+								o1 = bfodd1;
+								v2 = hhandi2;
+								o2 = hfodd2;
+							}
+							else {
+								v1 = bhandi2;
+								o1 = bfodd2;
+								v2 = hhandi1;
+								o2 = hfodd1;
+							}
+						}
+						stake1 = 100; stake2 = stake1 * o1 / o2;
+						h1 = calc_middle(stake1, stake2, o1, o2, v1, v2);
+						pmatch->inf[2][pmatch->mcnt[2]].middle = h1;
+						pmatch->inf[2][pmatch->mcnt[2]].handi1 = v1;
+						pmatch->inf[2][pmatch->mcnt[2]].handi2 = v2;
+						pmatch->inf[2][pmatch->mcnt[2]].odd1 = o1;
+						pmatch->inf[2][pmatch->mcnt[2]++].odd2 = o2;
+					}
 					//User alternative lines to calc middling.
 					if (odds["results"][0].HasMember("others")) {
 						const Value &others = odds["results"][0]["others"];
@@ -1111,25 +1209,49 @@ void COppCheckDlg::ReadDataDisplay()
 									string ahandicap = aoddes[k]["handicap"].GetString();
 									float ahandi = get_handicap_from_string(ahandicap.c_str());
 									if (ah == 1) {
-										stake1 = 100; stake2 = stake1 * aodd / hfodd2;
-										h1 = calc_middle(stake1, stake2, aodd, hfodd2, ahandi, hhandi2);
-										pmatch->inf[2][pmatch->mcnt[2]].middle = h1;
-										pmatch->inf[2][pmatch->mcnt[2]].handi1 = ahandi;
-										pmatch->inf[2][pmatch->mcnt[2]].handi2 = hhandi2;;
-										pmatch->inf[2][pmatch->mcnt[2]].odd1 = aodd;
-										pmatch->inf[2][pmatch->mcnt[2]].nalt = 1;
-										pmatch->inf[2][pmatch->mcnt[2]++].odd2 = hfodd2;
+										if (hhandi2 >= 0) {
+											if (fabs(ahandi) > hhandi2 || ahandi > 0)
+												continue;
+											v1 = hhandi2;
+											o1 = hfodd2;
+											v2 = ahandi;
+											o2 = aodd;
+										}
+										else {
+											if (ahandi < fabs(hhandi2) || ahandi < 0)
+												continue;
+											v1 = ahandi;
+											o1 = aodd;
+											v2 = hhandi2;
+											o2 = hfodd2;
+										}
 									}
-									else {
-										stake1 = 100; stake2 = stake1 * hfodd1 / aodd;
-										h1 = calc_middle(stake1, stake2, hfodd1, aodd, hhandi1, ahandi);
-										pmatch->inf[2][pmatch->mcnt[2]].middle = h1;
-										pmatch->inf[2][pmatch->mcnt[2]].handi1 = hhandi1;
-										pmatch->inf[2][pmatch->mcnt[2]].handi2 = ahandi;;
-										pmatch->inf[2][pmatch->mcnt[2]].odd1 = hfodd1;
-										pmatch->inf[2][pmatch->mcnt[2]].nalt = 1;
-										pmatch->inf[2][pmatch->mcnt[2]++].odd2 = aodd;
+									else if (ah == 2) {
+										if (hhandi1 <= 0) {
+											if (ahandi < fabs(hhandi1) || ahandi < 0)
+												continue;
+											v1 = ahandi;
+											o1 = aodd;
+											v2 = hhandi1;
+											o2 = hfodd1;
+										}
+										else {
+											if (fabs(ahandi) > hhandi1 || ahandi > 0)
+												continue;
+											v1 = hhandi1;
+											o1 = hfodd1;
+											v2 = ahandi;
+											o2 = aodd;
+										}
 									}
+									stake1 = 100; stake2 = stake1 * o1 / o2;
+									h1 = calc_middle(stake1, stake2, o1, o2, v1, v2);
+									pmatch->inf[2][pmatch->mcnt[2]].middle = h1;
+									pmatch->inf[2][pmatch->mcnt[2]].handi1 = v1;
+									pmatch->inf[2][pmatch->mcnt[2]].handi2 = v2;;
+									pmatch->inf[2][pmatch->mcnt[2]].odd1 = o1;
+									pmatch->inf[2][pmatch->mcnt[2]].nalt = 1;
+									pmatch->inf[2][pmatch->mcnt[2]++].odd2 = o2;
 								}
 								break;
 							}
@@ -1165,22 +1287,28 @@ void COppCheckDlg::ReadDataDisplay()
 						pmatch->arinf[3].h2_odd1 = hfodd1;
 						pmatch->arinf[3].h2_odd2 = bfodd2;
 					}
-
-					stake1 = 100; stake2 = stake1 * bfodd1 / hfodd2;
-					h1 = calc_middle_ou(stake1, stake2, bfodd1, hfodd2, bhandi1, hhandi2, 'o', 'u');
-					pmatch->inf[3][pmatch->mcnt[3]].middle = h1;
-					pmatch->inf[3][pmatch->mcnt[3]].handi1 = bhandi1;
-					pmatch->inf[3][pmatch->mcnt[3]].handi2 = hhandi2;;
-					pmatch->inf[3][pmatch->mcnt[3]].odd1 = bfodd1;
-					pmatch->inf[3][pmatch->mcnt[3]++].odd2 = hfodd2;
-
-					stake1 = 100; stake2 = stake1 * hfodd1 / bfodd2;
-					h2 = calc_middle_ou(stake1, stake2, hfodd1, bfodd2, hhandi1, bhandi2, 'o', 'u');
-					pmatch->inf[3][pmatch->mcnt[3]].middle = h2;
-					pmatch->inf[3][pmatch->mcnt[3]].handi1 = hhandi1;
-					pmatch->inf[3][pmatch->mcnt[3]].handi2 = bhandi2;;
-					pmatch->inf[3][pmatch->mcnt[3]].odd1 = hfodd1;
-					pmatch->inf[3][pmatch->mcnt[3]++].odd2 = bfodd2;
+					else {
+						if (bhandi1 < hhandi2) {
+							v1 = bhandi1;
+							o1 = bfodd1;
+							v2 = hhandi2;
+							o2 = hfodd2;
+						}
+						else {
+							v1 = hhandi1;
+							o1 = hfodd1;
+							v2 = bhandi2;
+							o2 = bfodd2;
+						}
+						stake1 = 100; stake2 = stake1 * o1 / o2;
+						h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+						pmatch->inf[3][pmatch->mcnt[3]].middle = h1;
+						pmatch->inf[3][pmatch->mcnt[3]].handi1 = v1;
+						pmatch->inf[3][pmatch->mcnt[3]].handi2 = v2;;
+						pmatch->inf[3][pmatch->mcnt[3]].odd1 = o1;
+						pmatch->inf[3][pmatch->mcnt[3]].nalt = 2;
+						pmatch->inf[3][pmatch->mcnt[3]++].odd2 = o2;
+					}
 					if (odds["results"][0].HasMember("others")) {
 						const Value &others = odds["results"][0]["others"];
 						ndiff = others.Size();
@@ -1195,25 +1323,33 @@ void COppCheckDlg::ReadDataDisplay()
 									string ahandicap = aoddes[k]["name"].GetString();
 									float ahandi = get_handicap_from_string(ahandicap.c_str());
 									if (aheader == "Over") {
-										stake1 = 100; stake2 = stake1 * aodd / hfodd2;
-										h1 = calc_middle_ou(stake1, stake2, aodd, hfodd2, ahandi, hhandi2, 'o', 'u');
-										pmatch->inf[3][pmatch->mcnt[3]].middle = h1;
-										pmatch->inf[3][pmatch->mcnt[3]].handi1 = ahandi;
-										pmatch->inf[3][pmatch->mcnt[3]].handi2 = hhandi2;;
-										pmatch->inf[3][pmatch->mcnt[3]].odd1 = aodd;
-										pmatch->inf[3][pmatch->mcnt[3]].odd2 = hfodd2;
-										pmatch->inf[3][pmatch->mcnt[3]++].nalt = 1;
+										if (ahandi < hhandi2) {
+											v1 = ahandi;
+											o1 = aodd;
+											v2 = hhandi2;
+											o2 = hfodd2;
+										}
+										else
+											continue;
 									}
 									else {
-										stake1 = 100; stake2 = stake1 * hfodd1 / aodd;
-										h1 = calc_middle_ou(stake1, stake2, hfodd1, aodd, hhandi1, ahandi, 'o', 'u');
-										pmatch->inf[3][pmatch->mcnt[3]].middle = h1;
-										pmatch->inf[3][pmatch->mcnt[3]].handi1 = hhandi1;
-										pmatch->inf[3][pmatch->mcnt[3]].handi2 = ahandi;;
-										pmatch->inf[3][pmatch->mcnt[3]].odd1 = hfodd1;
-										pmatch->inf[3][pmatch->mcnt[3]].odd2 = aodd;
-										pmatch->inf[3][pmatch->mcnt[3]++].nalt = 1;
+										if (ahandi > hhandi1) {
+											v1 = hhandi1;
+											o1 = hfodd1;
+											v2 = ahandi;
+											o2 = aodd;
+										}
+										else
+											continue;
 									}
+									stake1 = 100; stake2 = stake1 * o1 / o2;
+									h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+									pmatch->inf[3][pmatch->mcnt[3]].middle = h1;
+									pmatch->inf[3][pmatch->mcnt[3]].handi1 = v1;
+									pmatch->inf[3][pmatch->mcnt[3]].handi2 = v2;
+									pmatch->inf[3][pmatch->mcnt[3]].odd1 = o1;
+									pmatch->inf[3][pmatch->mcnt[3]].odd2 = o2;
+									pmatch->inf[3][pmatch->mcnt[3]++].nalt = 3;
 								}
 								break;
 							}
@@ -1226,6 +1362,7 @@ void COppCheckDlg::ReadDataDisplay()
 
 				if (hga[i].HasMember("CN_DATA")) {
 					const Value& cn_data = hga[i]["CN_DATA"];
+					sstrong = cn_data["STRONG"].IsNull() ? "null" : cn_data["STRONG"].GetString();
 					shandicap = cn_data["RATIO_R"].IsNull() ? "null" : cn_data["RATIO_R"].GetString();
 					shodd = cn_data["IOR_RH"].IsNull() ? "null" : cn_data["IOR_RH"].GetString();
 					scodd = cn_data["IOR_RC"].IsNull() ? "null" : cn_data["IOR_RC"].GetString();
@@ -1241,7 +1378,7 @@ void COppCheckDlg::ReadDataDisplay()
 						bhandi1 = get_handicap_from_string(bhandicap1.c_str());
 						bhandi2 = get_handicap_from_string(bhandicap2.c_str());
 
-						hhandi1 = atof(shandicap.c_str());
+						hhandi1 = get_handicap_from_string(shandicap.c_str(),'/');
 						hhandi2 = -hhandi1;
 
 						bfodd1 = atof(bodd1.c_str());
@@ -1263,22 +1400,44 @@ void COppCheckDlg::ReadDataDisplay()
 							pmatch->arinf[4].h2_odd1 = hfodd1;
 							pmatch->arinf[4].h2_odd2 = bfodd2;
 						}
-
-						stake1 = 100; stake2 = stake1 * bfodd1 / hfodd2;
-						h1 = calc_middle(stake1, stake2, bfodd1, hfodd2, bhandi1, hhandi2);
-						pmatch->inf[4][pmatch->mcnt[4]].middle = h1;
-						pmatch->inf[4][pmatch->mcnt[4]].handi1 = bhandi1;
-						pmatch->inf[4][pmatch->mcnt[4]].handi2 = hhandi2;;
-						pmatch->inf[4][pmatch->mcnt[4]].odd1 = bfodd1;
-						pmatch->inf[4][pmatch->mcnt[4]++].odd2 = hfodd2;
-
-						stake1 = 100; stake2 = stake1 * hfodd1 / bfodd2;
-						h2 = calc_middle(stake1, stake2, hfodd1, bfodd2, hhandi1, bhandi2);
-						pmatch->inf[4][pmatch->mcnt[4]].middle = h2;
-						pmatch->inf[4][pmatch->mcnt[4]].handi1 = hhandi1;
-						pmatch->inf[4][pmatch->mcnt[4]].handi2 = bhandi2;;
-						pmatch->inf[4][pmatch->mcnt[4]].odd1 = hfodd1;
-						pmatch->inf[4][pmatch->mcnt[4]++].odd2 = bfodd2;
+						else {
+							if (fabs(bhandi1) - fabs(hhandi1) < 0) {
+								//This means hga offer high value.
+								if (hhandi1 > 0) {
+									v1 = hhandi1;
+									o1 = hfodd1;
+									v2 = bhandi2;
+									o2 = bfodd2;
+								}
+								else {
+									v1 = hhandi2;
+									o1 = hfodd2;
+									v2 = bhandi1;
+									o2 = bfodd1;
+								}
+							}
+							else {
+								if (bhandi1 > 0) {
+									v1 = bhandi1;
+									o1 = bfodd1;
+									v2 = hhandi2;
+									o2 = hfodd2;
+								}
+								else {
+									v1 = bhandi2;
+									o1 = bfodd2;
+									v2 = hhandi1;
+									o2 = hfodd1;
+								}
+							}
+							stake1 = 100; stake2 = stake1 * o1 / o2;
+							h1 = calc_middle(stake1, stake2, o1, o2, v1, v2);
+							pmatch->inf[4][pmatch->mcnt[4]].middle = h1;
+							pmatch->inf[4][pmatch->mcnt[4]].handi1 = v1;
+							pmatch->inf[4][pmatch->mcnt[4]].handi2 = v2;;
+							pmatch->inf[4][pmatch->mcnt[4]].odd1 = o1;
+							pmatch->inf[4][pmatch->mcnt[4]++].odd2 = o2;
+						}
 					}
 					/////////////////////////////////////////////////////////////
 					// asian_total_corners
@@ -1309,22 +1468,28 @@ void COppCheckDlg::ReadDataDisplay()
 							pmatch->arinf[5].h2_odd1 = hfodd1;
 							pmatch->arinf[5].h2_odd2 = bfodd2;
 						}
-
-						stake1 = 100; stake2 = stake1 * bfodd1 / hfodd2;
-						h1 = calc_middle_ou(stake1, stake2, bfodd1, hfodd2, bhandi1, hhandi2, 'o', 'u');
-						pmatch->inf[5][pmatch->mcnt[5]].middle = h1;
-						pmatch->inf[5][pmatch->mcnt[5]].handi1 = bhandi1;
-						pmatch->inf[5][pmatch->mcnt[5]].handi2 = hhandi2;;
-						pmatch->inf[5][pmatch->mcnt[5]].odd1 = bfodd1;
-						pmatch->inf[5][pmatch->mcnt[5]++].odd2 = hfodd2;
-
-						stake1 = 100; stake2 = stake1 * hfodd1 / bfodd2;
-						h2 = calc_middle_ou(stake1, stake2, hfodd1, bfodd2, hhandi1, bhandi2, 'o', 'u');
-						pmatch->inf[5][pmatch->mcnt[5]].middle = h2;
-						pmatch->inf[5][pmatch->mcnt[5]].handi1 = hhandi1;
-						pmatch->inf[5][pmatch->mcnt[5]].handi2 = bhandi2;;
-						pmatch->inf[5][pmatch->mcnt[5]].odd1 = hfodd1;
-						pmatch->inf[5][pmatch->mcnt[5]++].odd2 = bfodd2;
+						else {
+							if (bhandi1 < hhandi2) {
+								v1 = bhandi1;
+								o1 = bfodd1;
+								v2 = hhandi2;
+								o2 = hfodd2;
+							}
+							else {
+								v1 = hhandi1;
+								o1 = hfodd1;
+								v2 = bhandi2;
+								o2 = bfodd2;
+							}
+							stake1 = 100; stake2 = stake1 * o1 / o2;
+							h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+							pmatch->inf[5][pmatch->mcnt[5]].middle = h1;
+							pmatch->inf[5][pmatch->mcnt[5]].handi1 = v1;
+							pmatch->inf[5][pmatch->mcnt[5]].handi2 = v2;;
+							pmatch->inf[5][pmatch->mcnt[5]].odd1 = o1;
+							pmatch->inf[5][pmatch->mcnt[5]].nalt = 2;
+							pmatch->inf[5][pmatch->mcnt[5]++].odd2 = o2;
+						}
 					}
 					////////////////////////////////////////////////////////////////
 					// 1st_half_asian_corners
@@ -1360,22 +1525,28 @@ void COppCheckDlg::ReadDataDisplay()
 							pmatch->arinf[6].h2_odd1 = hfodd1;
 							pmatch->arinf[6].h2_odd2 = bfodd2;
 						}
-
-						stake1 = 100; stake2 = stake1 * bfodd1 / hfodd2;
-						h1 = calc_middle_ou(stake1, stake2, bfodd1, hfodd2, bhandi1, hhandi2, 'o', 'u');
-						pmatch->inf[6][pmatch->mcnt[6]].middle = h1;
-						pmatch->inf[6][pmatch->mcnt[6]].handi1 = bhandi1;
-						pmatch->inf[6][pmatch->mcnt[6]].handi2 = hhandi2;;
-						pmatch->inf[6][pmatch->mcnt[6]].odd1 = bfodd1;
-						pmatch->inf[6][pmatch->mcnt[6]++].odd2 = hfodd2;
-
-						stake1 = 100; stake2 = stake1 * hfodd1 / bfodd2;
-						h2 = calc_middle_ou(stake1, stake2, hfodd1, bfodd2, hhandi1, bhandi2, 'o', 'u');
-						pmatch->inf[6][pmatch->mcnt[6]].middle = h2;
-						pmatch->inf[6][pmatch->mcnt[6]].handi1 = hhandi1;
-						pmatch->inf[6][pmatch->mcnt[6]].handi2 = bhandi2;;
-						pmatch->inf[6][pmatch->mcnt[6]].odd1 = hfodd1;
-						pmatch->inf[6][pmatch->mcnt[6]++].odd2 = bfodd2;
+						else {
+							if (bhandi1 < hhandi2) {
+								v1 = bhandi1;
+								o1 = bfodd1;
+								v2 = hhandi2;
+								o2 = hfodd2;
+							}
+							else {
+								v1 = hhandi1;
+								o1 = hfodd1;
+								v2 = bhandi2;
+								o2 = bfodd2;
+							}
+							stake1 = 100; stake2 = stake1 * o1 / o2;
+							h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+							pmatch->inf[6][pmatch->mcnt[6]].middle = h1;
+							pmatch->inf[6][pmatch->mcnt[6]].handi1 = v1;
+							pmatch->inf[6][pmatch->mcnt[6]].handi2 = v2;;
+							pmatch->inf[6][pmatch->mcnt[6]].odd1 = o1;
+							pmatch->inf[6][pmatch->mcnt[6]].odd1 = 2;
+							pmatch->inf[6][pmatch->mcnt[6]++].odd2 = o2;
+						}
 					}
 				}
 
@@ -1384,6 +1555,7 @@ void COppCheckDlg::ReadDataDisplay()
 				/////////////////////////////////////////////////////////////////////////////
 				if (hga[i].HasMember("RN_DATA")) {
 					const Value& rn_data = hga[i]["RN_DATA"];
+					sstrong = rn_data["STRONG"].IsNull() ? "null" : rn_data["STRONG"].GetString();
 					shandicap = rn_data["RATIO_R"].IsNull() ? "null" : rn_data["RATIO_R"].GetString();
 					shodd = rn_data["IOR_RH"].IsNull() ? "null" : rn_data["IOR_RH"].GetString();
 					scodd = rn_data["IOR_RC"].IsNull() ? "null" : rn_data["IOR_RC"].GetString();
@@ -1395,7 +1567,7 @@ void COppCheckDlg::ReadDataDisplay()
 						bhandi1 = get_handicap_from_string(bhandicap1.c_str());
 						bhandi2 = get_handicap_from_string(bhandicap2.c_str());
 
-						hhandi1 = atof(shandicap.c_str());
+						hhandi1 = get_handicap_from_string(shandicap.c_str(),'/');
 						hhandi2 = -hhandi1;
 
 						bfodd1 = atof(bodd1.c_str());
@@ -1417,24 +1589,44 @@ void COppCheckDlg::ReadDataDisplay()
 							pmatch->arinf[7].h2_odd1 = hfodd1;
 							pmatch->arinf[7].h2_odd2 = bfodd2;
 						}
-
-						//Check Middling
-						stake1 = 100; stake2 = stake1 * bfodd1 / hfodd2;
-						h1 = calc_middle(stake1, stake2, bfodd1, hfodd2, bhandi1, hhandi2);
-						pmatch->inf[7][pmatch->mcnt[7]].middle = h1;
-						pmatch->inf[7][pmatch->mcnt[7]].handi1 = bhandi1;
-						pmatch->inf[7][pmatch->mcnt[7]].handi2 = hhandi2;;
-						pmatch->inf[7][pmatch->mcnt[7]].odd1 = bfodd1;
-						pmatch->inf[7][pmatch->mcnt[7]++].odd2 = hfodd2;
-
-						stake1 = 100; stake2 = stake1 * hfodd1 / bfodd2;
-						h2 = calc_middle(stake1, stake2, hfodd1, bfodd2, hhandi1, bhandi2);
-						pmatch->inf[7][pmatch->mcnt[7]].middle = h2;
-						pmatch->inf[7][pmatch->mcnt[7]].handi1 = hhandi1;
-						pmatch->inf[7][pmatch->mcnt[7]].handi2 = bhandi2;;
-						pmatch->inf[7][pmatch->mcnt[7]].odd1 = hfodd1;
-						pmatch->inf[7][pmatch->mcnt[7]++].odd2 = bfodd2;
-
+						else {
+							if (fabs(bhandi1) - fabs(hhandi1) < 0) {
+								//This means hga offer high value.
+								if (hhandi1 > 0) {
+									v1 = hhandi1;
+									o1 = hfodd1;
+									v2 = bhandi2;
+									o2 = bfodd2;
+								}
+								else {
+									v1 = hhandi2;
+									o1 = hfodd2;
+									v2 = bhandi1;
+									o2 = bfodd1;
+								}
+							}
+							else {
+								if (bhandi1 > 0) {
+									v1 = bhandi1;
+									o1 = bfodd1;
+									v2 = hhandi2;
+									o2 = hfodd2;
+								}
+								else {
+									v1 = bhandi2;
+									o1 = bfodd2;
+									v2 = hhandi1;
+									o2 = hfodd1;
+								}
+							}
+							stake1 = 100; stake2 = stake1 * o1 / o2;
+							h1 = calc_middle(stake1, stake2, o1, o2, v1, v2);
+							pmatch->inf[7][pmatch->mcnt[7]].middle = h1;
+							pmatch->inf[7][pmatch->mcnt[7]].handi1 = v1;
+							pmatch->inf[7][pmatch->mcnt[7]].handi2 = v2;;
+							pmatch->inf[7][pmatch->mcnt[7]].odd1 = o1;
+							pmatch->inf[7][pmatch->mcnt[7]++].odd2 = o2;
+						}
 					}
 					////////////////////////////////////////////////////////////////////////////////
 					// asian_total_cards
@@ -1471,28 +1663,35 @@ void COppCheckDlg::ReadDataDisplay()
 							pmatch->arinf[8].h2_odd1 = hfodd1;
 							pmatch->arinf[8].h2_odd2 = bfodd2;
 						}
-
-						stake1 = 100; stake2 = stake1 * bfodd1 / hfodd2;
-						h1 = calc_middle_ou(stake1, stake2, bfodd1, hfodd2, bhandi1, hhandi2, 'o', 'u');
-						pmatch->inf[8][pmatch->mcnt[8]].middle = h1;
-						pmatch->inf[8][pmatch->mcnt[8]].handi1 = bhandi1;
-						pmatch->inf[8][pmatch->mcnt[8]].handi2 = hhandi2;;
-						pmatch->inf[8][pmatch->mcnt[8]].odd1 = bfodd1;
-						pmatch->inf[8][pmatch->mcnt[8]++].odd2 = hfodd2;
-
-						stake1 = 100; stake2 = stake1 * hfodd1 / bfodd2;
-						h2 = calc_middle_ou(stake1, stake2, hfodd1, bfodd2, hhandi1, bhandi2, 'o', 'u');
-						pmatch->inf[8][pmatch->mcnt[8]].middle = h2;
-						pmatch->inf[8][pmatch->mcnt[8]].handi1 = hhandi1;
-						pmatch->inf[8][pmatch->mcnt[8]].handi2 = bhandi2;;
-						pmatch->inf[8][pmatch->mcnt[8]].odd1 = hfodd1;
-						pmatch->inf[8][pmatch->mcnt[8]++].odd2 = bfodd2;
+						else {
+							if (bhandi1 < hhandi2) {
+								v1 = bhandi1;
+								o1 = bfodd1;
+								v2 = hhandi2;
+								o2 = hfodd2;
+							}
+							else {
+								v1 = hhandi1;
+								o1 = hfodd1;
+								v2 = bhandi2;
+								o2 = bfodd2;
+							}
+							stake1 = 100; stake2 = stake1 * o1 / o2;
+							h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+							pmatch->inf[8][pmatch->mcnt[8]].middle = h1;
+							pmatch->inf[8][pmatch->mcnt[8]].handi1 = v1;
+							pmatch->inf[8][pmatch->mcnt[8]].handi2 = v2;;
+							pmatch->inf[8][pmatch->mcnt[8]].odd1 = o1;
+							pmatch->inf[8][pmatch->mcnt[8]].nalt = 2;
+							pmatch->inf[8][pmatch->mcnt[8]++].odd2 = o2;
+						}
 					}
 				}
 			}
 		}
 		g_matches.push_back(pmatch);
-		m_show.SetPos(i);
+		
+		//break;
 	}
 	g_updated = 1;
 	int nend_time = GetTickCount();
@@ -1518,6 +1717,8 @@ int COppCheckDlg::GetBet365_Odd(int match_id) {
 	CURLcode ret = curl_easy_perform(hnd);
 	curl_slist_free_all(headers);
 	curl_easy_cleanup(hnd);
+
+
 	return ret;
 }
 void COppCheckDlg::getWStr(const char *timestamp, wchar_t *wstr) {
@@ -1545,19 +1746,19 @@ void COppCheckDlg::getWhere(int n, wchar_t *p) {
 		wcscpy(p, L"1st Half Goal Line");
 		break;
 	case 4:
-		wcscpy(p, L"Asian Total Corners");
+		wcscpy(p, L"Asian Handicap Corners");
 		break;
 	case 5:
-		wcscpy(p, L"Asian Handicap Corners");
+		wcscpy(p, L"Asian Total Corners");
 		break;
 	case 6:
 		wcscpy(p, L"1st Half Asian Corners");
 		break;
 	case 7:
-		wcscpy(p, L"Asian Total Cards");
+		wcscpy(p, L"Asian Handicap Cards");
 		break;
 	case 8:
-		wcscpy(p, L"Asian Handicap Cards");
+		wcscpy(p, L"Asian Total Cards");
 		break;
 	default:
 		break;
@@ -1666,7 +1867,7 @@ DWORD COppCheckDlg::display_func() {
 			for (j = 0; j < CHECK_PARAMS; j++) {
 				for (k = 0; k < pm->mcnt[j]; k++) {
 					middle = pm->inf[j][k].middle;
-					if (middle > 4.0) {
+					if (middle > g_nFilter) {
 						if (nmid == 0) {
 							if (narb == 0)
 								narb = 1;
@@ -1692,15 +1893,21 @@ DWORD COppCheckDlg::display_func() {
 						swprintf(buff, 260, L"%.3f", middle);
 						m_org.SetItemText(idx + narb + nmid, 1, buff);
 
-						if (pm->inf[j][k].nalt == 1)
+						if (pm->inf[j][k].nalt & 1)
 							m_org.SetItemText(idx + narb + nmid, 2, L"AlternativeLine");						
 
 						memset(buff, 0, 260);
-						swprintf(buff, 260, L"%.3f", pm->inf[j][k].handi1);
+						if(pm->inf[j][k].nalt & 2)
+							swprintf(buff, 260, L"O%.2f", pm->inf[j][k].handi1);
+						else
+							swprintf(buff, 260, L"%.3f", pm->inf[j][k].handi1);
 						m_org.SetItemText(idx + narb + nmid, 3, buff);
 
 						memset(buff, 0, 260);
-						swprintf(buff, 260, L"%.3f", pm->inf[j][k].handi2);
+						if (pm->inf[j][k].nalt & 2)
+							swprintf(buff, 260, L"U%.2f", pm->inf[j][k].handi2);
+						else
+							swprintf(buff, 260, L"%.3f", pm->inf[j][k].handi2);
 						m_org.SetItemText(idx + narb + nmid, 4, buff);
 
 						memset(buff, 0, 260);
@@ -1775,5 +1982,13 @@ void COppCheckDlg::TimeStamp2String(const char *timestamp, wchar_t *strtime) {
 }
 void COppCheckDlg::OnBnClickedButton1()
 {
+	CString txt;
+	GetDlgItemText(IDC_EDIT_FILTER, txt);
+	if (txt.GetLength() == 0) {
+		MessageBox(L"Please input filter value");
+		return;
+	}
+	g_nFilter = GetDlgItemInt(IDC_EDIT_FILTER);
 
+	g_updated = 1;
 }

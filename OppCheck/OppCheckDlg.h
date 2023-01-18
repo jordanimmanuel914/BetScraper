@@ -4,6 +4,7 @@
 
 #pragma once
 #include "afxcmn.h"
+#include "afxwin.h"
 
 
 // COppCheckDlg dialog
@@ -63,4 +64,5 @@ public:
 	afx_msg void OnBnClickedButton1();
 	CListCtrl m_org;
 	CProgressCtrl m_show;
+	CEdit m_filteredit;
 };

@@ -202,23 +202,23 @@ class Hga038Spider(scrapy.Spider):
                 "DATETIME":str(int(timestamp)),
                 "LEAGUE":game.find('LEAGUE').text,
                 "TEAM_H":team_h,
-                "TEAM_C":team_c,
-                "STRONG":game.find('STRONG').text,                
+                "TEAM_C":team_c,                             
                 "MAIN_DATA":{
+                    "STRONG":game.find('STRONG').text,
                     "RATIO_R":ratio_r,
                     "IOR_RH":str(ior_rh),
                     "IOR_RC":str(ior_rc),
                     "RATIO_OUO":game.find('RATIO_OUO').text,
                     "RATIO_OUU":game.find('RATIO_OUU').text,
-                    "IOR_OUH":str(ior_ouh),
-                    "IOR_OUC":str(ior_ouc),
+                    "IOR_OUH":str(ior_ouc),
+                    "IOR_OUC":str(ior_ouh),
                     "RATIO_HR":ratio_hr,
                     "IOR_HRH":str(ior_hrh),
                     "IOR_HRC":str(ior_hrc),
                     "RATIO_HOUO":game.find('RATIO_HOUO').text,
                     "RATIO_HOUU":game.find('RATIO_HOUU').text,
-                    "IOR_HOUH":str(ior_houh),
-                    "IOR_HOUC":str(ior_houc)
+                    "IOR_HOUH":str(ior_houc),
+                    "IOR_HOUC":str(ior_houh)
                 }
             })
             formdata = {
@@ -285,23 +285,23 @@ class Hga038Spider(scrapy.Spider):
                 "ID":tree.find('ec').get('id'),
                 "LEAGUE":game.find('LEAGUE').text,
                 "TEAM_H":team_h,
-                "TEAM_C":team_c,
-                "STRONG":game.find('STRONG').text,
+                "TEAM_C":team_c,                
                 "CN_DATA":{
-                    "RATIO_R":game.find('RATIO_R').text,
+                    "STRONG":game.find('STRONG').text,
+                    "RATIO_R":game.find('RATIO_R').text,                    
                     "IOR_RH":str(ior_rh),
                     "IOR_RC":str(ior_rc),
                     "RATIO_OUO":game.find('RATIO_OUO').text,
                     "RATIO_OUU":game.find('RATIO_OUU').text,
-                    "IOR_OUH":str(ior_ouh),
-                    "IOR_OUC":str(ior_ouc),
+                    "IOR_OUH":str(ior_ouc),
+                    "IOR_OUC":str(ior_ouh),
                     "RATIO_HR":game.find('RATIO_HR').text,
                     "IOR_HRH":str(ior_hrh),
                     "IOR_HRC":str(ior_hrc),
                     "RATIO_HOUO":game.find('RATIO_HOUO').text,
                     "RATIO_HOUU":game.find('RATIO_HOUU').text,
-                    "IOR_HOUH":str(ior_houh),
-                    "IOR_HOUC":str(ior_houc)
+                    "IOR_HOUH":str(ior_houc),
+                    "IOR_HOUC":str(ior_houh)
                 }
             })
     def getGameRN(self, response):
@@ -346,22 +346,22 @@ class Hga038Spider(scrapy.Spider):
                 "ID":tree.find('ec').get('id'),
                 "LEAGUE":game.find('LEAGUE').text,
                 "TEAM_H":team_h,
-                "TEAM_C":team_c,
-                "STRONG":game.find('STRONG').text,
+                "TEAM_C":team_c,                
                 "RN_DATA":{
+                    "STRONG":game.find('STRONG').text,
                     "RATIO_R":game.find('RATIO_R').text,
                     "IOR_RH":str(ior_rh),
                     "IOR_RC":str(ior_rc),
                     "RATIO_OUO":game.find('RATIO_OUO').text,
                     "RATIO_OUU":game.find('RATIO_OUU').text,
-                    "IOR_OUH":str(ior_ouh),
-                    "IOR_OUC":str(ior_ouc),
+                    "IOR_OUH":str(ior_ouc),
+                    "IOR_OUC":str(ior_ouh),
                     "RATIO_HR":game.find('RATIO_HR').text,
                     "IOR_HRH":str(ior_hrh),
                     "IOR_HRC":str(ior_hrc),
                     "RATIO_HOUO":game.find('RATIO_HOUO').text,
                     "RATIO_HOUU":game.find('RATIO_HOUU').text,
-                    "IOR_HOUH":str(ior_houh),
-                    "IOR_HOUC":str(ior_houc)
+                    "IOR_HOUH":str(ior_houc),
+                    "IOR_HOUC":str(ior_houh)
                 }
             })
