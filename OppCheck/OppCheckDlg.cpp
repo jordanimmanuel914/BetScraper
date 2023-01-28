@@ -20,22 +20,55 @@
 using namespace std;
 using namespace rapidjson;
 
+//#define TEST_MODE
 #define PLAYER_WIN	 0
 #define LOSE		 1
 #define STAKE_REFUND 2
 #define HALF_WIN	 3
 #define HALF_LOSE	 4
-
+#define MIN_ARBIT   100.6
 typedef struct state_struct {
 	int goal_diff;
 	int state1;
 	int state2;
 } STATE_STRUCT;
 
+string gs_betresponse;
 string gs_strLastResponse;
 vector<match_inf *> g_matches;
 int g_updated = 0;
 int g_nFilter = 5;
+string g_textFilter;
+match_inf *pinterested_match = NULL;
+match_inf *new_int_match = NULL;
+int m_autorefresh = 0;
+int goal_filter = 0;
+int corner_filter = 0;
+int book_filter = 0;
+
+int isSameString(string str1, string str2) {
+	if (str1 == str2)
+		return 1;
+	int n1 = str1.find(0x20);
+	int n2 = str2.find(0x20);
+	if (n1 == 0 && n2 == 0)
+		return 0;
+	string str2_1 = str2 + " ";
+	string str2_2 = " " + str2;
+	string str1_1 = str1 + " ";
+	string str1_2 = " "+str1;
+	if (str1.find(str2_1) != string::npos)
+		return 1;
+	if (str1.find(str2_2) != string::npos)
+		return 1;
+
+	if (str2.find(str1_1) != string::npos)
+		return 1;
+	if (str2.find(str1_2) != string::npos)
+		return 1;
+	return 0;
+}
+
 class CAboutDlg : public CDialogEx
 {
 public:
@@ -76,9 +109,18 @@ COppCheckDlg::COppCheckDlg(CWnd* pParent /*=NULL*/)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 	m_status = 0;
+	m_hcatch_auto = INVALID_HANDLE_VALUE;
+	m_hcatch = INVALID_HANDLE_VALUE;
 }
 COppCheckDlg::~COppCheckDlg() {
 	clear_match();
+	int j;
+	if (new_int_match != NULL) {
+		delete new_int_match->arinf;
+		for (j = 0; j < CHECK_PARAMS; j++)
+			delete new_int_match->inf[j];
+		delete new_int_match;
+	}
 }
 void COppCheckDlg::OnOK() {
 
@@ -90,6 +132,9 @@ void COppCheckDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_PROGRESS1, m_show);
 	DDX_Control(pDX, IDC_EDIT_FILTER, m_filteredit);
 	DDX_Control(pDX, IDC_LIST1, m_lstint);
+	DDX_Control(pDX, IDC_CHK_AUTO, m_autochk);
+	DDX_Control(pDX, IDC_REFRESH, m_btn_refresh);
+	DDX_Control(pDX, IDC_COMBO1, m_seltype);
 }
 
 BEGIN_MESSAGE_MAP(COppCheckDlg, CDialogEx)
@@ -98,6 +143,11 @@ BEGIN_MESSAGE_MAP(COppCheckDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BUTTON1, &COppCheckDlg::OnBnClickedButton1)
 	ON_BN_CLICKED(IDC_BTN_ADDTO, &COppCheckDlg::OnBnClickedBtnAddto)
+	ON_BN_CLICKED(IDC_CHK_AUTO, &COppCheckDlg::OnBnClickedChkAuto)
+	ON_BN_CLICKED(IDC_REFRESH, &COppCheckDlg::OnBnClickedRefresh)
+	ON_BN_CLICKED(IDC_CHK_GOAL, &COppCheckDlg::OnBnClickedChkGoal)
+	ON_BN_CLICKED(IDC_CHK_CORNER, &COppCheckDlg::OnBnClickedChkCorner)
+	ON_BN_CLICKED(IDC_CHK_BOOK, &COppCheckDlg::OnBnClickedChkBook)
 END_MESSAGE_MAP()
 
 
@@ -107,7 +157,6 @@ BOOL COppCheckDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
 	// Add "About..." menu item to system menu.
-
 	// IDM_ABOUTBOX must be in the system command range.
 	ASSERT((IDM_ABOUTBOX & 0xFFF0) == IDM_ABOUTBOX);
 	ASSERT(IDM_ABOUTBOX < 0xF000);
@@ -134,17 +183,23 @@ BOOL COppCheckDlg::OnInitDialog()
 	// TODO: Add extra initialization here
 	DWORD dwThreadId;
 	gs_strLastResponse = "";
-	m_hcatch = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)catch_thread, this, 0, &dwThreadId);
+	//m_hcatch = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)catch_thread, this, 0, &dwThreadId);
+	//m_hdisplay = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)display_thread, this, 0, &dwThreadId);
+#ifndef TEST_MODE
+	CreateThread(0, 0, (LPTHREAD_START_ROUTINE)inter_thread, this, 0, &dwThreadId);
+#endif
 	m_hdisplay = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)display_thread, this, 0, &dwThreadId);
+	
 	Initlist();
 	
 	SetDlgItemInt(IDC_EDIT_FILTER, 5);
 	CFont myFont;
-	myFont.CreateFont(20, 0, 0, 0, FW_HEAVY, true, false,
+	myFont.CreateFont(16, 0, 0, 0, FW_HEAVY, true, false,
 		0, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
 		FIXED_PITCH | FF_MODERN, _T("Courier New"));
 
 	m_filteredit.SetFont(&myFont);
+
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
 float COppCheckDlg::get_profit(float odd, float myhandicap, float money, int mygoal, int op_goal) {
@@ -294,12 +349,12 @@ int COppCheckDlg::checkOU(char t, float v, int goal) {
 	return 0;
 }
 float COppCheckDlg::calc_middle(float stake1, float stake2, float odd1, float odd2, float handicap1, float handicap2) {
-	int i, idx = 0, state1, state2, j, ct, ct1;
+	int i, idx = 0, state1, state2, ct, ct1;
 	int nv1 = (int)(handicap1 * 100);
 	int nv2 = (int)(handicap2 * 100);
 	struct state_struct stt_array[10];
 	float values[10] = { 0 };
-	float tmp,favg,tmp1, favg1;
+	float tmp,favg,tmp1;
 
 
 	stt_array[idx].goal_diff = -20;
@@ -379,9 +434,9 @@ float COppCheckDlg::calc_middle(float stake1, float stake2, float odd1, float od
 	return tmp;
 }
 float COppCheckDlg::calc_middle_ou(float stake1, float stake2, float odd1, float odd2, float handicap1, float handicap2, char c1, char c2) {
-	int i, j, idx = 0,ct,ct1;
+	int i,idx = 0,ct,ct1;
 	int state1, state2;
-	float tmp, favg, tmp1, favg1;
+	float tmp, favg, tmp1;
 	struct state_struct stt_array[20];
 	float values[20] = { 0 };
 
@@ -468,10 +523,12 @@ float COppCheckDlg::calc_middle_ou(float stake1, float stake2, float odd1, float
 float COppCheckDlg::checkArbitrage(float odd1, float odd2) {
 	float x = 100;
 	float xx = (odd1 * x) / (odd1 + odd2);
-	return xx * odd2 - x;
+	//return xx * odd2 - x;
 	float x1 = 1.0 / odd1;
 	float y1 = 1.0 / odd2;
-	return 1.0 - (x1 + y1);
+	xx = (x1 + y1) * 100;
+	return xx;
+	//return 1.0 - (x1 + y1);
 }
 float COppCheckDlg::checkArbitrage3(float a1, float a2, float a3) {
 	float y = a3 * 100 / (a2 + a3 + (a2*a3 / a1));
@@ -565,9 +622,9 @@ void COppCheckDlg::Initlist() {
 	m_lstint.SetColumnWidth(4, 80);
 
 	m_org.InsertColumn(5, L"Where");
-	m_org.SetColumnWidth(5, 100);
+	m_org.SetColumnWidth(5, 130);
 	m_lstint.InsertColumn(5, L"Where");
-	m_lstint.SetColumnWidth(5, 100);
+	m_lstint.SetColumnWidth(5, 130);
 
 	m_org.InsertColumn(6, L"Odd1");
 	m_org.SetColumnWidth(6, 80);
@@ -575,24 +632,19 @@ void COppCheckDlg::Initlist() {
 	m_lstint.SetColumnWidth(6, 80);
 
 	m_org.InsertColumn(7, L"Odd2");
-	m_org.SetColumnWidth(7, 80);
+	m_org.SetColumnWidth(7, 100);
 	m_lstint.InsertColumn(7, L"Odd2");
-	m_lstint.SetColumnWidth(7, 80);
+	m_lstint.SetColumnWidth(7, 100);
 
-	m_org.InsertColumn(8, L"");
-	m_org.SetColumnWidth(8, 40);
-	m_lstint.InsertColumn(8, L"");
-	m_lstint.SetColumnWidth(8, 40);
+	m_org.InsertColumn(8, L"Identifier");
+	m_org.SetColumnWidth(8, 80);
 
-	m_org.InsertColumn(9, L"");
-	m_org.SetColumnWidth(9, 40);
+	m_org.InsertColumn(9, L"BID");
+	m_org.SetColumnWidth(9, 80);
 
-	m_org.InsertColumn(10, L"Identifier");
-	m_org.SetColumnWidth(10, 80);
-
-	m_lstint.InsertColumn(9, L"");
-	m_lstint.SetColumnWidth(9, 40);
-
+	m_seltype.AddString(L"Search by name");
+	m_seltype.AddString(L"Search by middle");
+	m_seltype.SetCurSel(1);
 	m_lstint.SendMessage(LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_HEADERDRAGDROP);
 	m_org.SendMessage(LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_FULLROWSELECT|LVS_EX_GRIDLINES | LVS_EX_HEADERDRAGDROP);
 }
@@ -651,6 +703,11 @@ size_t function_pt(void *ptr, size_t size, size_t nmemb, void * /*stream*/)
 	gs_strLastResponse += (const char*)ptr;
 	return size * nmemb;
 }
+size_t function_pt1(void *ptr, size_t size, size_t nmemb, void * /*stream*/)
+{
+	gs_betresponse += (const char*)ptr;
+	return size * nmemb;
+}
 void COppCheckDlg::GetHGA() {
 	system("hga.bat");
 	//int k = 0;
@@ -707,9 +764,9 @@ std::string ReplaceAll(std::string str, const std::string& from, const std::stri
 void Replaces_String(string &str) {
 	int i, len;
 	string tmp;
-	string a[23] = { "AC ", "AFC ", "BSC ", "BK ", "CA ", "CD ", "CF ", "CR ", "CS ", "CSD ", "FC ", "IA ", "RC ", "SA ", "SC ", "SV ", "JF ", "GD ", "Club ", "U21 ","U20 ","U19 ","Women " };
-	string b[24] = { " AC", " AFC", " BSC", " BK", " CA", " CD", " CF", " CR", " CS", " CSD", " FC", " IA", " RC", " SA", " SC", " SV", " JF", " GD", " Club", " (W)", " U21"," U20"," U19"," Women" };
-	for (i = 0; i < 23; i++) {
+	string a[23] = { "AC ", "AFC ", "BSC ", "BK ", "CA ", "CD ", "CF ", "CR ", "CS ", "CSD ", "FC ", "IA ", "RC ", "SA ", "SC ", "SV ", "JF ", "GD ", "Club ", "Women " };
+	string b[24] = { " AC", " AFC", " BSC", " BK", " CA", " CD", " CF", " CR", " CS", " CSD", " FC", " IA", " RC", " SA", " SC", " SV", " JF", " GD", " Club", " (W)", " Women" };
+	for (i = 0; i < 20; i++) {
 		len = a[i].length();
 		if (len < str.length()) {
 			tmp = str.substr(0, len);
@@ -717,7 +774,7 @@ void Replaces_String(string &str) {
 				str = ReplaceAll(str, a[i], "");
 		}
 	}
-	for (i = 0; i < 24; i++) {
+	for (i = 0; i < 21; i++) {
 		len = b[i].length();
 		if (len < str.length()) {
 			tmp = str.substr(str.length() - len, len);
@@ -734,11 +791,14 @@ void COppCheckDlg::clear_match() {
 		delete pinf->arinf;
 		for (j = 0; j < CHECK_PARAMS; j++)
 			delete pinf->inf[j];
-		delete pinf->lid;
+
 		delete pinf;		
-	}
+	}	
 	g_matches.clear();
+	pinterested_match = NULL;
 }
+
+
 float COppCheckDlg::get_handicap_from_string(const char *p, int deli = ',') {
 	char buf[40] = { 0 };
 	strcpy(buf, p);
@@ -754,19 +814,19 @@ float COppCheckDlg::get_handicap_from_string(const char *p, int deli = ',') {
 void COppCheckDlg::Asian_GoalLine(match_inf *pmatch, float *bhandi1, float *bhandi2, float *hhandi1, float *hhandi2,
 	float *bfodd1, float *bfodd2, float *hfodd1, float *hfodd2, int inx) {
 	int hcount = 0, bcount = 0;
-	int i, j, k;
+	int i, j;
 	float stake1, stake2;
 	float mid, ar;
-	for (i = 0; i < 4; i++) {
-		if (fabs(hfodd1[i] - 0) < 0.001) {
+	for (i = 0; i < 10; i++) {
+		if (fabs(hfodd1[i]) < 1.001) {
 			hcount = i;
 			break;
 		}
 	}
-	hcount = (hcount == 0) ? 4 : hcount;
+	hcount = (hcount == 0) ? 10 : hcount;
 
 	for (i = 0; i < 20; i++) {
-		if (fabs(hfodd1[i] - 0) < 0.001) {
+		if (fabs(bfodd1[i]) < 1.001) {
 			bcount = i;
 			break;
 		}
@@ -778,10 +838,12 @@ void COppCheckDlg::Asian_GoalLine(match_inf *pmatch, float *bhandi1, float *bhan
 			if (fabs(hhandi1[i]-hhandi2[j]) < 0.001) {
 				//calc abitrage
 				ar = checkArbitrage(hfodd1[i], hfodd2[j]);
-				if (ar > -0.5f) {
+				if (ar <= MIN_ARBIT) {
 					pmatch->arinf[pmatch->arcnt].ar = ar;
+					pmatch->arinf[pmatch->arcnt].ov = fabs(hhandi1[i]);
 					pmatch->arinf[pmatch->arcnt].odd1 = hfodd1[i];
 					pmatch->arinf[pmatch->arcnt].odd2 = hfodd2[j];
+					pmatch->arinf[pmatch->arcnt].nwhere = inx;
 					pmatch->arinf[pmatch->arcnt].c1 = 'H';
 					pmatch->arinf[pmatch->arcnt++].c2 = 'H';
 					pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
@@ -801,6 +863,7 @@ void COppCheckDlg::Asian_GoalLine(match_inf *pmatch, float *bhandi1, float *bhan
 				pmatch->inf[inx][pmatch->mcnt[inx]].nalt = 3;
 				pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'H';
 				pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'H';
+				
 				pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
 			}
 		}
@@ -808,10 +871,12 @@ void COppCheckDlg::Asian_GoalLine(match_inf *pmatch, float *bhandi1, float *bhan
 			if (fabs(hhandi1[i]-bhandi2[j]) < 0.001) {
 				//calc abitrage
 				ar = checkArbitrage(hfodd1[i], bfodd2[j]);
-				if (ar > -0.5f) {
+				if (ar <= MIN_ARBIT) {
 					pmatch->arinf[pmatch->arcnt].ar = ar;
+					pmatch->arinf[pmatch->arcnt].ov = fabs(hhandi1[i]);
 					pmatch->arinf[pmatch->arcnt].odd1 = hfodd1[i];
 					pmatch->arinf[pmatch->arcnt].odd2 = bfodd2[j];
+					pmatch->arinf[pmatch->arcnt].nwhere = inx;
 					pmatch->arinf[pmatch->arcnt].c1 = 'H';
 					pmatch->arinf[pmatch->arcnt++].c2 = 'B';
 					pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
@@ -839,10 +904,12 @@ void COppCheckDlg::Asian_GoalLine(match_inf *pmatch, float *bhandi1, float *bhan
 			if (fabs(bhandi1[i] -bhandi2[j]) < 0.001) {
 				//calc abitrage
 				ar = checkArbitrage(bfodd1[i], bfodd2[j]);
-				if (ar > -0.5f) {
+				if (ar <= MIN_ARBIT) {
 					pmatch->arinf[pmatch->arcnt].ar = ar;
+					pmatch->arinf[pmatch->arcnt].ov = fabs(bhandi1[i]);
 					pmatch->arinf[pmatch->arcnt].odd1 = bfodd1[i];
 					pmatch->arinf[pmatch->arcnt].odd2 = bfodd2[j];
+					pmatch->arinf[pmatch->arcnt].nwhere = inx;
 					pmatch->arinf[pmatch->arcnt].c1 = 'B';
 					pmatch->arinf[pmatch->arcnt++].c2 = 'B';
 					pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
@@ -868,10 +935,12 @@ void COppCheckDlg::Asian_GoalLine(match_inf *pmatch, float *bhandi1, float *bhan
 			if (fabs(bhandi1[i]-hhandi2[j]) < 0.001) {
 				//calc abitrage
 				ar = checkArbitrage(bfodd1[i], hfodd2[j]);
-				if (ar > -0.5f) {
+				if (ar <= MIN_ARBIT) {
 					pmatch->arinf[pmatch->arcnt].ar = ar;
+					pmatch->arinf[pmatch->arcnt].ov = fabs(bhandi1[i]);
 					pmatch->arinf[pmatch->arcnt].odd1 = bfodd1[i];
 					pmatch->arinf[pmatch->arcnt].odd2 = hfodd2[j];
+					pmatch->arinf[pmatch->arcnt].nwhere = inx;
 					pmatch->arinf[pmatch->arcnt].c1 = 'B';
 					pmatch->arinf[pmatch->arcnt++].c2 = 'H';
 					pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
@@ -903,16 +972,16 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 	int i, j;
 	float stake1, stake2;
 	float mid, ar;
-	for (i = 0; i < 4; i++) {
-		if (fabs(hfodd1[i] - 0) < 0.001) {
+	for (i = 0; i < 10; i++) {
+		if (fabs(hfodd1[i]) < 1.001) {
 			hcount = i;
 			break;
 		}
 	}
-	hcount = (hcount == 0)? 4 : hcount;
+	hcount = (hcount == 0)? 10 : hcount;
 
 	for (i = 0; i < 20; i++) {
-		if (fabs(hfodd1[i] - 0) < 0.001) {
+		if (fabs(bfodd1[i]) < 1.001) {
 			bcount = i;
 			break;
 		}
@@ -924,10 +993,12 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 			if (fabs(bhandi1[i] + bhandi2[j]) < 0.001) {
 				//calc abitrage
 				ar = checkArbitrage(bfodd1[i], bfodd2[j]);
-				if (ar > -0.5f) {
+				if (ar <= MIN_ARBIT) {
 					pmatch->arinf[pmatch->arcnt].ar = ar;
+					pmatch->arinf[pmatch->arcnt].ov = fabs(bhandi1[i]);
 					pmatch->arinf[pmatch->arcnt].odd1 = bfodd1[i];
 					pmatch->arinf[pmatch->arcnt].odd2 = bfodd2[j];
+					pmatch->arinf[pmatch->arcnt].nwhere = inx;
 					pmatch->arinf[pmatch->arcnt].c1 = 'B';
 					pmatch->arinf[pmatch->arcnt++].c2 = 'B';
 					pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
@@ -936,7 +1007,7 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 			else {
 				//calc middling.
 				if (bhandi1[i] >= 0) {
-					if (fabs(bhandi2[j]) >= bhandi1[i])
+					if (fabs(bhandi2[j]) >= bhandi1[i] || bhandi2[j] > 0)
 						continue; //can be polish middling
 					stake1 = 1000; stake2 = bfodd1[i] * stake1 / bfodd2[j];
 					mid = calc_middle(stake1, stake2, bfodd1[i], bfodd2[j], bhandi1[i], bhandi2[j]);
@@ -945,12 +1016,14 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = bhandi2[j];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = bfodd1[i];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = bfodd2[j];
+					pmatch->inf[inx][pmatch->mcnt[inx]].nalt = 1;
 					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'B';
+
 					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'B';
 					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
 				}
 				else {
-					if (bhandi2[j] <= fabs(bhandi1[i]))
+					if (bhandi2[j] <= fabs(bhandi1[i]) || bhandi2[j] < 0)
 						continue; //can be polish middling
 					stake2 = 1000; stake1 = bfodd2[j] * stake2 / bfodd1[i];
 					mid = calc_middle(stake2, stake1, bfodd2[j], bfodd1[i], bhandi2[j], bhandi1[i]);
@@ -959,6 +1032,7 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = bhandi1[i];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = bfodd2[j];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = bfodd1[i];
+					pmatch->inf[inx][pmatch->mcnt[inx]].nalt = 1;
 					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'B';
 					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'B';
 					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
@@ -969,10 +1043,12 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 			if (fabs(bhandi1[i] + hhandi2[j]) < 0.001) {
 				//calc abitrage
 				ar = checkArbitrage(bfodd1[i], hfodd2[j]);
-				if (ar > -0.5f) {
+				if (ar <= MIN_ARBIT) {
 					pmatch->arinf[pmatch->arcnt].ar = ar;
+					pmatch->arinf[pmatch->arcnt].ov = fabs(bhandi1[i]);
 					pmatch->arinf[pmatch->arcnt].odd1 = bfodd1[i];
 					pmatch->arinf[pmatch->arcnt].odd2 = hfodd2[j];
+					pmatch->arinf[pmatch->arcnt].nwhere = inx;
 					pmatch->arinf[pmatch->arcnt].c1 = 'B';
 					pmatch->arinf[pmatch->arcnt++].c2 = 'H';
 					pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
@@ -981,7 +1057,7 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 			else {
 				//calc middling.
 				if (bhandi1[i] >= 0) {
-					if (fabs(hhandi2[j]) >= bhandi1[i])
+					if (fabs(hhandi2[j]) >= bhandi1[i] || hhandi2[j] > 0)
 						continue; //can be polish middling
 					stake1 = 1000; stake2 = bfodd1[i] * stake1 / hfodd2[j];
 					mid = calc_middle(stake1, stake2, bfodd1[i], hfodd2[j], bhandi1[i], hhandi2[j]);
@@ -990,12 +1066,13 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = hhandi2[j];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = bfodd1[i];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = hfodd2[j];
+					pmatch->inf[inx][pmatch->mcnt[inx]].nalt = 1;
 					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'B';
 					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'H';
 					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
 				}
 				else {
-					if (hhandi2[j] <= fabs(bhandi1[i]))
+					if (hhandi2[j] <= fabs(bhandi1[i]) || hhandi2[j] < 0)
 						continue; //can be polish middling
 					stake2 = 1000; stake1 = hfodd2[j] * stake2 / bfodd1[i];
 					mid = calc_middle(stake2, stake1, hfodd2[j], bfodd1[i], hhandi2[j], bhandi1[i]);
@@ -1004,195 +1081,9 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = bhandi1[i];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = hfodd2[j];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = bfodd1[i];
+					pmatch->inf[inx][pmatch->mcnt[inx]].nalt = 1;
 					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'H';
 					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'B';
-					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
-				}
-			}
-		}
-	}
-
-	for (i = 0; i < bcount; i++) {
-		for (j = 0; j < bcount; j++) {
-			if (fabs(bhandi2[i] + bhandi1[j]) < 0.001) {
-				//calc abitrage
-				ar = checkArbitrage(bfodd2[i], bfodd1[j]);
-				if (ar > -0.5f) {
-					pmatch->arinf[pmatch->arcnt].ar = ar;
-					pmatch->arinf[pmatch->arcnt].odd1 = bfodd2[i];
-					pmatch->arinf[pmatch->arcnt].odd2 = bfodd1[j];
-					pmatch->arinf[pmatch->arcnt].c1 = 'B';
-					pmatch->arinf[pmatch->arcnt++].c2 = 'B';
-					pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
-				}
-			}
-			else {
-				//calc middling.
-				if (bhandi2[i] >= 0) {
-					if (fabs(bhandi1[j]) >= bhandi2[i])
-						continue; //can be polish middling
-					stake1 = 1000; stake2 = bfodd2[i] * stake1 / bfodd1[j];
-					mid = calc_middle(stake1, stake2, bfodd2[i], bfodd1[j], bhandi2[i], bhandi1[j]);
-					pmatch->inf[inx][pmatch->mcnt[inx]].middle = mid;
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi1 = bhandi2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = bhandi1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = bfodd2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = bfodd1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'B';
-					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'B';
-					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
-				}
-				else {
-					if (bhandi1[j] <= fabs(bhandi2[i]))
-						continue; //can be polish middling
-					stake2 = 1000; stake1 = bfodd1[j] * stake2 / bfodd2[i];
-					mid = calc_middle(stake2, stake1, bfodd1[j], bfodd2[i], bhandi1[j], bhandi2[i]);
-					pmatch->inf[inx][pmatch->mcnt[inx]].middle = mid;
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi1 = bhandi1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = bhandi2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = bfodd1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = bfodd2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'B';
-					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'B';
-					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
-				}
-			}
-		}
-		for (j = 0; j < hcount; j++) {
-			if (fabs(bhandi2[i] + hhandi1[j]) < 0.001) {
-				//calc abitrage
-				ar = checkArbitrage(bfodd2[i], hfodd1[j]);
-				if (ar > -0.5f) {
-					pmatch->arinf[pmatch->arcnt].ar = ar;
-					pmatch->arinf[pmatch->arcnt].odd1 = bfodd2[i];
-					pmatch->arinf[pmatch->arcnt].odd2 = hfodd1[j];
-					pmatch->arinf[pmatch->arcnt].c1 = 'B';
-					pmatch->arinf[pmatch->arcnt++].c2 = 'H';
-					pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
-				}
-			}
-			else {
-				//calc middling.
-				if (bhandi2[i] >= 0) {
-					if (fabs(hhandi1[j]) >= bhandi2[i])
-						continue; //can be polish middling
-					stake1 = 1000; stake2 = bfodd2[i] * stake1 / hfodd1[j];
-					mid = calc_middle(stake1, stake2, bfodd2[i], hfodd1[j], bhandi2[i], hhandi1[j]);
-					pmatch->inf[inx][pmatch->mcnt[inx]].middle = mid;
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi1 = bhandi2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = hhandi1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = bfodd2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = hfodd1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'B';
-					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'H';
-					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
-				}
-				else {
-					if (hhandi1[j] <= fabs(bhandi2[i]))
-						continue; //can be polish middling
-					stake2 = 1000; stake1 = hfodd1[j] * stake2 / bfodd2[i];
-					mid = calc_middle(stake2, stake1, hfodd1[j], bfodd2[i], hhandi1[j], bhandi2[i]);
-					pmatch->inf[inx][pmatch->mcnt[inx]].middle = mid;
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi1 = hhandi1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = bhandi2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = hfodd1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = bfodd2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'H';
-					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'B';
-					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
-				}
-
-			}
-		}
-	}
-
-	for (i = 0; i < hcount; i++) {
-		for (j = 0; j < hcount; j++) {
-			if (fabs(hhandi2[i] + hhandi1[j]) < 0.001) {
-				//calc abitrage
-				ar = checkArbitrage(hfodd2[i], hfodd1[j]);
-				if (ar > -0.5f) {
-					pmatch->arinf[pmatch->arcnt].ar = ar;
-					pmatch->arinf[pmatch->arcnt].odd1 = hfodd2[i];
-					pmatch->arinf[pmatch->arcnt].odd2 = hfodd1[j];
-					pmatch->arinf[pmatch->arcnt].c1 = 'H';
-					pmatch->arinf[pmatch->arcnt++].c2 = 'H';
-					pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
-				}
-			}
-			else {
-				//calc middling.
-				if (hhandi2[i] >= 0) {
-					if (fabs(hhandi1[j]) >= hhandi2[i])
-						continue; //can be polish middling
-					stake1 = 1000; stake2 = hfodd2[i] * stake1 / hfodd1[j];
-					mid = calc_middle(stake1, stake2, hfodd2[i], hfodd1[j], hhandi2[i], hhandi1[j]);
-					pmatch->inf[inx][pmatch->mcnt[inx]].middle = mid;
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi1 = hhandi2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = hhandi1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = hfodd2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = hfodd1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'B';
-					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'B';
-					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
-				}
-				else {
-					if (hhandi1[j] <= fabs(hhandi2[i]))
-						continue; //can be polish middling
-					stake2 = 1000; stake1 = hfodd1[j] * stake2 / hfodd2[i];
-					mid = calc_middle(stake2, stake1, hfodd1[j], hfodd2[i], hhandi1[j], hhandi2[i]);
-					pmatch->inf[inx][pmatch->mcnt[inx]].middle = mid;
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi1 = hhandi1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = hhandi2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = hfodd1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = hfodd2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'H';
-					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'H';
-					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
-				}
-			}
-		}
-		for (j = 0; j < bcount; j++) {
-			if (fabs(hhandi2[i] +bhandi1[j]) < 0.001) {
-				//calc abitrage
-				ar = checkArbitrage(hfodd2[i], bfodd1[j]);
-				if (ar > -0.5f) {
-					pmatch->arinf[pmatch->arcnt].ar = ar;
-					pmatch->arinf[pmatch->arcnt].odd1 = hfodd2[i];
-					pmatch->arinf[pmatch->arcnt].odd2 = bfodd1[j];
-					pmatch->arinf[pmatch->arcnt].c1 = 'H';
-					pmatch->arinf[pmatch->arcnt++].c2 = 'B';
-					pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
-				}
-			}
-			else {
-				//calc middling.
-				if (hhandi2[i] >= 0) {
-					if (fabs(bhandi1[j]) >= hhandi2[i])
-						continue; //can be polish middling
-					stake1 = 1000; stake2 = hfodd2[i] * stake1 / bfodd1[j];
-					mid = calc_middle(stake1, stake2, hfodd2[i], bfodd1[j], hhandi2[i], bhandi1[j]);
-					pmatch->inf[inx][pmatch->mcnt[inx]].middle = mid;
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi1 = hhandi2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = bhandi1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = hfodd2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = bfodd1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'H';
-					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'B';
-					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
-				}
-				else {
-					if (bhandi1[j] <= fabs(hhandi2[i]))
-						continue; //can be polish middling
-					stake2 = 1000; stake1 = bfodd1[j] * stake2 / hfodd2[i];
-					mid = calc_middle(stake2, stake1, bfodd1[j], hfodd2[i], bhandi1[j], hhandi2[i]);
-					pmatch->inf[inx][pmatch->mcnt[inx]].middle = mid;
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi1 = bhandi1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = hhandi2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = bfodd1[j];
-					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = hfodd2[i];
-					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'B';
-					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'H';
 					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
 				}
 			}
@@ -1204,10 +1095,12 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 			if (fabs(hhandi1[i] + hhandi2[j]) < 0.001) {
 				//calc abitrage
 				ar=checkArbitrage(hfodd1[i], hfodd2[j]);
-				if (ar > -0.5f) {
+				if (ar <= MIN_ARBIT) {
 					pmatch->arinf[pmatch->arcnt].ar = ar;
+					pmatch->arinf[pmatch->arcnt].ov = fabs(hhandi1[i]);
 					pmatch->arinf[pmatch->arcnt].odd1 = hfodd1[i];
 					pmatch->arinf[pmatch->arcnt].odd2 = hfodd2[j];
+					pmatch->arinf[pmatch->arcnt].nwhere = inx;
 					pmatch->arinf[pmatch->arcnt].c1 = 'H';
 					pmatch->arinf[pmatch->arcnt++].c2 = 'H';
 					pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
@@ -1216,7 +1109,7 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 			else {
 				//calc middling.
 				if (hhandi1[i] >= 0) {
-					if (fabs(hhandi2[j]) >= hhandi1[i])
+					if (fabs(hhandi2[j]) >= hhandi1[i] || hhandi2[j] > 0)
 						continue; //can be polish middling
 					stake1 = 1000; stake2 = hfodd1[i] * stake1 / hfodd2[j];
 					mid = calc_middle(stake1, stake2, hfodd1[i], hfodd2[j], hhandi1[i], hhandi2[j]);
@@ -1225,12 +1118,13 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = hhandi2[j];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = hfodd1[i];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = hfodd2[j];
+					pmatch->inf[inx][pmatch->mcnt[inx]].nalt = 1;
 					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'H';
 					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'H';
 					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
 				}
 				else {
-					if (hhandi2[j] <= fabs(hhandi1[i]))
+					if (hhandi2[j] <= fabs(hhandi1[i]) || hhandi2[j] < 0)
 						continue; //can be polish middling
 					stake2 = 1000; stake1 = hfodd2[j] * stake2 / hfodd1[i];
 					mid = calc_middle(stake2, stake1, hfodd2[j], hfodd1[i], hhandi2[j], hhandi1[i]);
@@ -1239,6 +1133,7 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = hhandi1[i];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = hfodd2[j];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = hfodd1[i];
+					pmatch->inf[inx][pmatch->mcnt[inx]].nalt = 1;
 					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'H';
 					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'H';
 					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
@@ -1249,19 +1144,21 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 			if (fabs(hhandi1[i]+bhandi2[j]) < 0.001) {
 				//calc abitrage
 				ar = checkArbitrage(hfodd1[i], bfodd2[j]);
-				if (ar > -0.5f) {
+				if (ar <= MIN_ARBIT) {
 					pmatch->arinf[pmatch->arcnt].ar = ar;
+					pmatch->arinf[pmatch->arcnt].ov = fabs(hhandi1[i]);
 					pmatch->arinf[pmatch->arcnt].odd1 = hfodd1[i];
 					pmatch->arinf[pmatch->arcnt].odd2 = bfodd2[j];
+					pmatch->arinf[pmatch->arcnt].nwhere = inx;
 					pmatch->arinf[pmatch->arcnt].c1 = 'H';
-					pmatch->arinf[pmatch->arcnt++].c2 = 'B';
+					pmatch->arinf[pmatch->arcnt++].c2 = 'B';					
 					pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
 				}
 			}
 			else {
 				//calc middling.
 				if (hhandi1[i] >= 0) {
-					if (fabs(bhandi2[j]) >= hhandi1[i])
+					if (fabs(bhandi2[j]) >= hhandi1[i] || bhandi2[j] > 0)
 						continue; //can be polish middling
 					stake1 = 1000; stake2 = hfodd1[i] * stake1 / bfodd2[j];
 					mid = calc_middle(stake1, stake2, hfodd1[i], bfodd2[j], hhandi1[i], bhandi2[j]);
@@ -1270,12 +1167,13 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = bhandi2[j];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = hfodd1[i];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = bfodd2[j];
+					pmatch->inf[inx][pmatch->mcnt[inx]].nalt = 1;
 					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'H';
 					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'B';
 					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
 				}
 				else {
-					if (bhandi2[j] <= fabs(hhandi1[i]))
+					if (bhandi2[j] <= fabs(hhandi1[i]) || bhandi2[j] < 0)
 						continue; //can be polish middling
 					stake2 = 1000; stake1 = bfodd2[j] * stake2 / hfodd1[i];
 					mid = calc_middle(stake2, stake1, bfodd2[j], hfodd1[i], bhandi2[j], hhandi1[i]);
@@ -1284,6 +1182,7 @@ void COppCheckDlg::Asian_Handicap(match_inf *pmatch, float *bhandi1, float *bhan
 					pmatch->inf[inx][pmatch->mcnt[inx]].handi2 = hhandi1[i];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd1 = bfodd2[j];
 					pmatch->inf[inx][pmatch->mcnt[inx]].odd2 = hfodd1[i];
+					pmatch->inf[inx][pmatch->mcnt[inx]].nalt = 1;
 					pmatch->inf[inx][pmatch->mcnt[inx]].c1 = 'B';
 					pmatch->inf[inx][pmatch->mcnt[inx]++].c2 = 'H';
 					pmatch->inf[inx] = (middle_inf*)realloc(pmatch->inf[inx], (pmatch->mcnt[inx] + 1) * sizeof(middle_inf));
@@ -1335,7 +1234,7 @@ void COppCheckDlg::ReadDataDisplay()
 	int nbet = bet365.Size();
 	float h1, stake1, stake2;
 	wchar_t buff[200] = { 0 };
-	int idx = 0, nalt;
+	int idx = 0, nalt, commtime = 0, ntimestart, ntimeend;
 	g_updated = 0;
 	clear_match();
 
@@ -1343,34 +1242,23 @@ void COppCheckDlg::ReadDataDisplay()
 	m_show.SetRange(0, nhga - 1);
 	for (i = 0; i < nhga; i++) {
 		m_show.SetPos(i);
-
+		string hid = hga[i]["ID"].GetString();
 		string sdatetime = hga[i]["DATETIME"].GetString();
 		string showtype = hga[i]["showtype"].GetString();
-		string lid = hga[i]["lid"].GetString();
+		string lid = hga[i]["uid"].GetString();
 		string sleaguename = hga[i]["LEAGUE"].IsNull() ? "null" : hga[i]["LEAGUE"].GetString();
 		if (sleaguename.find("Fantasy Matches") != string::npos) {
 			continue;
 		}
+
 		string shometeam = hga[i]["TEAM_H"].IsNull() ? "null" : hga[i]["TEAM_H"].GetString();
 		string sawayteam = hga[i]["TEAM_C"].IsNull() ? "null" : hga[i]["TEAM_C"].GetString();		
-		const Value& main_data = hga[i]["MAIN_DATA"];
-		string sstrong = main_data["STRONG"].IsNull() ? "null" : main_data["STRONG"].GetString();
-		string shandicap = main_data["RATIO_R"].IsNull() ? "null" : main_data["RATIO_R"].GetString();
-		string shodd = main_data["IOR_RH"].IsNull() ? "null" : main_data["IOR_RH"].GetString();
-		string scodd = main_data["IOR_RC"].IsNull() ? "null" : main_data["IOR_RC"].GetString();
-		string sgoalo = main_data["RATIO_OUO"].IsNull() ? "null" : main_data["RATIO_OUO"].GetString();
-		string sgoalu = main_data["RATIO_OUU"].IsNull() ? "null" : main_data["RATIO_OUU"].GetString();
-		string sgoaloodd = main_data["IOR_OUH"].IsNull() ? "null" : main_data["IOR_OUH"].GetString();
-		string sgoaluodd = main_data["IOR_OUC"].IsNull() ? "null" : main_data["IOR_OUC"].GetString();
-		string s1sthandicap = main_data["RATIO_HR"].IsNull() ? "null" : main_data["RATIO_HR"].GetString();
-		string s1sthodd = main_data["IOR_HRH"].IsNull() ? "null" : main_data["IOR_HRH"].GetString();
-		string s1stcodd = main_data["IOR_HRC"].IsNull() ? "null" : main_data["IOR_HRC"].GetString();
-		string s1stgoalo = main_data["RATIO_HOUO"].IsNull() ? "null" : main_data["RATIO_HOUO"].GetString();
-		string s1stgoalu = main_data["RATIO_HOUU"].IsNull() ? "null" : main_data["RATIO_HOUU"].GetString();
-		string s1stgoaloodd = main_data["IOR_HOUH"].IsNull() ? "null" : main_data["IOR_HOUH"].GetString();
-		string s1stgoaluodd = main_data["IOR_HOUC"].IsNull() ? "null" : main_data["IOR_HOUC"].GetString();
+		string sstrong, shandicap, shodd, scodd, sgoalo, sgoalu, sgoaloodd, sgoaluodd;	
 		int handi_alt = hga[i]["handicap_count"].GetInt();
 		int half_alt = hga[i]["1sthalf_count"].GetInt();
+		if (handi_alt == 0 || half_alt == 0)
+			continue;
+
 		string sid = "";
 		int ndiff = 0;
 		for (j = 0; j < nbet; j++) {
@@ -1380,53 +1268,52 @@ void COppCheckDlg::ReadDataDisplay()
 			for (k = 0; k < nk; k++) {
 				string stime = bet365[j]["results"][k]["time"].GetString();
 				ndiff = abs(atoi(stime.c_str()) - atoi(sdatetime.c_str()));
-				if (ndiff > 3600)
+				if (ndiff > 1200)
 					continue;
 				string sleague = bet365[j]["results"][k]["league"]["name"].GetString();
 				string sh = bet365[j]["results"][k]["home"]["name"].GetString();
 				string sc = bet365[j]["results"][k]["away"]["name"].GetString();
 				string sh1 = shometeam;
 				string sc1 = sawayteam;
+
 				for (auto & c : sh) c = toupper(c);
 				for (auto & c : sc) c = toupper(c);
 				for (auto & c : sc1) c = toupper(c);
 				for (auto & c : sh1) c = toupper(c);
-
-				Replaces_String(sh1);
-				Replaces_String(sc1);
-				Replaces_String(sh);
-				Replaces_String(sc);
-			
-				if ((sh.find(sh1) != std::string::npos || sc.find(sc1) != std::string::npos) || 
-					(sh1.find(sh) != std::string::npos || sc1.find(sc) != std::string::npos)) {
+				
+				if (isSameString(sh, sh1) || isSameString(sc, sc1)) {
 					sid = bet365[j]["results"][k]["id"].GetString();
 					break;
-				}
-			
+				}	
 			}
 			if (sid.length())
 				break;
 		}
+
 		ndiff = atoi(sid.c_str());
 		if (ndiff == 0)
 			continue;
+		
 		match_inf *pmatch = new match_inf;
 		memset(pmatch, 0, sizeof(match_inf));
 		pmatch->hga_inx = i;
 		pmatch->arcnt = 0;
 		pmatch->pthis = pmatch;
-		pmatch->match_id = ndiff;
-		pmatch->lid = new char[lid.length() + 1];
-		pmatch->lid[lid.length()] = 0;
+		pmatch->bid = ndiff;
+		pmatch->hid = atoi(hid.c_str());
+		pmatch->lid = atoi(lid.c_str());
 		strcpy(pmatch->showtype, showtype.c_str());
-		strcpy(pmatch->lid, lid.c_str());
+
 		pmatch->arinf = new arbit_inf;
 		for (j = 0;j < CHECK_PARAMS; j++)
 			pmatch->inf[j] = new middle_inf;
 
 		//g_matches.push_back(pmatch);
 		gs_strLastResponse = "";
+		ntimestart = GetTickCount();
 		ndiff = GetBet365_Odd(ndiff);
+		ntimeend = GetTickCount();
+		commtime += ntimeend - ntimestart;
 		Document odds;
 		if (ndiff == CURLE_OK) {
 			odds.Parse(gs_strLastResponse.c_str());
@@ -1439,10 +1326,10 @@ void COppCheckDlg::ReadDataDisplay()
 				string bodd1, bodd2, bhandicap1, bhandicap2;
 				float bhandi1, bhandi2, hhandi1, hhandi2, bfodd1, bfodd2, hfodd1, hfodd2;
 
-				float h_handis1[4] = { 0 };
-				float h_handis2[4] = { 0 };
-				float h_odds1[4] = { 0 };
-				float h_odds2[4] = { 0 };
+				float h_handis1[10] = { 0 };
+				float h_handis2[10] = { 0 };
+				float h_odds1[10] = { 0 };
+				float h_odds2[10] = { 0 };
 				float b_handis1[20] = { 0 };
 				float b_handis2[20] = { 0 };
 				float b_odds1[20] = { 0 };
@@ -1459,28 +1346,14 @@ void COppCheckDlg::ReadDataDisplay()
 					bhandicap2 = sp["asian_handicap"]["odds"][1]["handicap"].GetString();
 					bhandi1 = get_handicap_from_string(bhandicap1.c_str());
 					bhandi2 = get_handicap_from_string(bhandicap2.c_str());
-					hhandi1 = get_handicap_from_string(shandicap.c_str(), '/');
-					hhandi2 = -hhandi1;
 					bfodd1 = atof(bodd1.c_str());
 					bfodd2 = atof(bodd2.c_str());
-					hfodd1 = atof(shodd.c_str());
-					hfodd2 = atof(scodd.c_str());
-					if (sstrong == "H") {
-						hhandi1 = hhandi2;
-						hhandi2 = -hhandi2;
-					}
-
-					h_handis1[0] = hhandi1;
-					h_handis2[0] = hhandi2;
-					h_odds1[0] = hfodd1;
-					h_odds2[0] = hfodd2;
-
 					b_handis1[0] = bhandi1;
 					b_handis2[0] = bhandi2;
 					b_odds1[0] = bfodd1;
 					b_odds2[0] = bfodd2;
 
-					for (j = 1;j < handi_alt; j++) {
+					for (j = 0;j < handi_alt; j++) {
 						sprintf(alt_buf, "handicap_%d", j+1);
 						const Value &altline = hga[i][alt_buf];
 						sstrong = altline["STRONG"].GetString();
@@ -1500,7 +1373,7 @@ void COppCheckDlg::ReadDataDisplay()
 						h_odds1[j] = hfodd1;
 						h_odds2[j] = hfodd2;
 					}
-					if (odds["results"][0].HasMember("others")) {
+					if (sp.HasMember("alternative_asian_handicap") && odds["results"][0].HasMember("others")) {
 						const Value &others = odds["results"][0]["others"];
 						ndiff = others.Size();
 						for (j = 0; j < ndiff; j++) {
@@ -1551,28 +1424,16 @@ void COppCheckDlg::ReadDataDisplay()
 					bhandicap2 = sp["goal_line"]["odds"][1]["name"].GetString();
 					bhandi1 = get_handicap_from_string(bhandicap1.c_str());
 					bhandi2 = get_handicap_from_string(bhandicap2.c_str());
-
 					bfodd1 = atof(bodd1.c_str());
-					bfodd2 = atof(bodd2.c_str());
-					hfodd1 = atof(sgoaloodd.c_str());
-					hfodd2 = atof(sgoaluodd.c_str());
-					sgoalo = ReplaceAll(sgoalo, "O", "");
-					sgoalu = ReplaceAll(sgoalu, "U", "");
-					hhandi1 = get_handicap_from_string(sgoalo.c_str(), '/');
-					hhandi2 = get_handicap_from_string(sgoalu.c_str(), '/');
-
-					h_handis1[0] = hhandi1;
-					h_handis2[0] = hhandi2;
-					h_odds1[0] = hfodd1;
-					h_odds2[0] = hfodd2;
-
+					bfodd2 = atof(bodd2.c_str());					
+					
 					b_handis1[0] = bhandi1;
 					b_handis2[0] = bhandi2;
 					b_odds1[0] = bfodd1;
 					b_odds2[0] = bfodd2;
 
 					memset(alt_buf, 0, 20);
-					for (j = 1;j < handi_alt; j++) {
+					for (j = 0;j < handi_alt; j++) {
 						sprintf(alt_buf, "handicap_%d", j+1);
 						const Value &altline = hga[i][alt_buf];
 						
@@ -1593,7 +1454,7 @@ void COppCheckDlg::ReadDataDisplay()
 						h_odds1[j] = hfodd1;
 						h_odds2[j] = hfodd2;
 					}
-					if (odds["results"][0].HasMember("others")) {
+					if (sp.HasMember("alternative_goal_line") && odds["results"][0].HasMember("others")) {
 						const Value &others = odds["results"][0]["others"];
 						ndiff = others.Size();
 						for (j = 0; j < ndiff; j++) {
@@ -1617,7 +1478,6 @@ void COppCheckDlg::ReadDataDisplay()
 										b_odds2[idx2] = aodd;
 										idx2++;
 									}
-
 								}
 								break;
 							}
@@ -1643,29 +1503,15 @@ void COppCheckDlg::ReadDataDisplay()
 					bhandicap2 = sp["1st_half_asian_handicap"]["odds"][1]["handicap"].GetString();
 					bhandi1 = get_handicap_from_string(bhandicap1.c_str());
 					bhandi2 = get_handicap_from_string(bhandicap2.c_str());
-
-					hhandi1 = get_handicap_from_string(s1sthandicap.c_str(),'/');
-					hhandi2 = -hhandi1;
-
 					bfodd1 = atof(bodd1.c_str());
 					bfodd2 = atof(bodd2.c_str());
-					hfodd1 = atof(s1sthodd.c_str());
-					hfodd2 = atof(s1stcodd.c_str());
-					if (sstrong == "H") {
-						hhandi1 = hhandi2;
-						hhandi2 = -hhandi2;
-					}
-					h_handis1[0] = hhandi1;
-					h_handis2[0] = hhandi2;
-					h_odds1[0] = hfodd1;
-					h_odds2[0] = hfodd2;
 
 					b_handis1[0] = bhandi1;
 					b_handis2[0] = bhandi2;
 					b_odds1[0] = bfodd1;
 					b_odds2[0] = bfodd2;
 					memset(alt_buf, 0, 20);
-					for (j = 1;j < half_alt; j++) {
+					for (j = 0;j < half_alt; j++) {
 						sprintf(alt_buf, "1sthalf_%d", j+1);
 						const Value &altline = hga[i][alt_buf];
 						sstrong = altline["STRONG"].GetString();
@@ -1686,7 +1532,7 @@ void COppCheckDlg::ReadDataDisplay()
 						h_odds2[j] = hfodd2;
 					}
 					//User alternative lines to calc middling.
-					if (odds["results"][0].HasMember("others")) {
+					if (sp.HasMember("alternative_1st_half_asian_handicap") && odds["results"][0].HasMember("others")) {
 						const Value &others = odds["results"][0]["others"];
 						ndiff = others.Size();
 						for (j = 0; j < ndiff; j++) {
@@ -1716,7 +1562,7 @@ void COppCheckDlg::ReadDataDisplay()
 							}
 						}
 					}
-					Asian_Handicap(pmatch, b_handis1, b_handis2, h_handis1, h_handis2, b_odds1, b_odds2, h_odds1, h_odds2, 3);
+					Asian_Handicap(pmatch, b_handis1, b_handis2, h_handis1, h_handis2, b_odds1, b_odds2, h_odds1, h_odds2, 2);
 				}
 				//////////////////////////////////////////////////////////////////////////////////
 				//	1st asian goal line
@@ -1740,17 +1586,7 @@ void COppCheckDlg::ReadDataDisplay()
 
 					bfodd1 = atof(bodd1.c_str());
 					bfodd2 = atof(bodd2.c_str());
-					hfodd1 = atof(s1stgoaloodd.c_str());
-					hfodd2 = atof(s1stgoaluodd.c_str());
-					s1stgoalo = ReplaceAll(s1stgoalo, "O", "");
-					s1stgoalu = ReplaceAll(s1stgoalu, "U", "");
-					hhandi1 = get_handicap_from_string(s1stgoalo.c_str(), '/');
-					hhandi2 = get_handicap_from_string(s1stgoalu.c_str(), '/');
-					h_handis1[0] = hhandi1;
-					h_handis2[0] = hhandi2;
-					h_odds1[0] = hfodd1;
-					h_odds2[0] = hfodd2;
-
+					
 					b_handis1[0] = bhandi1;
 					b_handis2[0] = bhandi2;
 					b_odds1[0] = bfodd1;
@@ -1758,7 +1594,7 @@ void COppCheckDlg::ReadDataDisplay()
 
 					memset(alt_buf, 0, 20);
 
-					for (j = 1;j < half_alt; j++) {
+					for (j = 0;j < half_alt; j++) {
 						sprintf(alt_buf, "1sthalf_%d", j+1);
 						const Value &altline = hga[i][alt_buf];
 
@@ -1780,7 +1616,7 @@ void COppCheckDlg::ReadDataDisplay()
 						h_odds2[j] = hfodd2;
 					}
 
-					if (odds["results"][0].HasMember("others")) {
+					if (sp.HasMember("alternative_1st_half_asian_handicap") && odds["results"][0].HasMember("others")) {
 						const Value &others = odds["results"][0]["others"];
 						ndiff = others.Size();
 						for (j = 0; j < ndiff; j++) {
@@ -1820,244 +1656,259 @@ void COppCheckDlg::ReadDataDisplay()
 					const Value& cn_data = hga[i]["CN_DATA"];
 					sstrong = cn_data["STRONG"].IsNull() ? "null" : cn_data["STRONG"].GetString();
 					shandicap = cn_data["RATIO_R"].IsNull() ? "null" : cn_data["RATIO_R"].GetString();
-					shodd = cn_data["IOR_RH"].IsNull() ? "null" : cn_data["IOR_RH"].GetString();
-					scodd = cn_data["IOR_RC"].IsNull() ? "null" : cn_data["IOR_RC"].GetString();
-					sgoalo = cn_data["RATIO_OUO"].IsNull() ? "null" : cn_data["RATIO_OUO"].GetString();
-					sgoalu = cn_data["RATIO_OUU"].IsNull() ? "null" : cn_data["RATIO_OUU"].GetString();
-					sgoaloodd = cn_data["IOR_OUH"].IsNull() ? "null" : cn_data["IOR_OUH"].GetString();
-					sgoaluodd = cn_data["IOR_OUC"].IsNull() ? "null" : cn_data["IOR_OUC"].GetString();
-					if (sp.HasMember("asian_handicap_corners")) {
-						bodd1 = sp["asian_handicap_corners"]["odds"][0]["odds"].GetString();
-						bodd2 = sp["asian_handicap_corners"]["odds"][1]["odds"].GetString();
-						bhandicap1 = sp["asian_handicap_corners"]["odds"][0]["handicap"].GetString();
-						bhandicap2 = sp["asian_handicap_corners"]["odds"][1]["handicap"].GetString();
-						bhandi1 = get_handicap_from_string(bhandicap1.c_str());
-						bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+					if (shandicap != "null") {
+						shodd = cn_data["IOR_RH"].IsNull() ? "null" : cn_data["IOR_RH"].GetString();
+						scodd = cn_data["IOR_RC"].IsNull() ? "null" : cn_data["IOR_RC"].GetString();
+						sgoalo = cn_data["RATIO_OUO"].IsNull() ? "null" : cn_data["RATIO_OUO"].GetString();
+						sgoalu = cn_data["RATIO_OUU"].IsNull() ? "null" : cn_data["RATIO_OUU"].GetString();
+						sgoaloodd = cn_data["IOR_OUH"].IsNull() ? "null" : cn_data["IOR_OUH"].GetString();
+						sgoaluodd = cn_data["IOR_OUC"].IsNull() ? "null" : cn_data["IOR_OUC"].GetString();
+						if (sp.HasMember("asian_handicap_corners")) {
+							bodd1 = sp["asian_handicap_corners"]["odds"][0]["odds"].GetString();
+							bodd2 = sp["asian_handicap_corners"]["odds"][1]["odds"].GetString();
+							bhandicap1 = sp["asian_handicap_corners"]["odds"][0]["handicap"].GetString();
+							bhandicap2 = sp["asian_handicap_corners"]["odds"][1]["handicap"].GetString();
+							bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+							bhandi2 = get_handicap_from_string(bhandicap2.c_str());
 
-						hhandi1 = get_handicap_from_string(shandicap.c_str(),'/');
-						hhandi2 = -hhandi1;
+							hhandi1 = get_handicap_from_string(shandicap.c_str(), '/');
+							hhandi2 = -hhandi1;
 
-						bfodd1 = atof(bodd1.c_str());
-						bfodd2 = atof(bodd2.c_str());
-						hfodd1 = atof(shodd.c_str());
-						hfodd2 = atof(scodd.c_str());
-						if (sstrong == "H") {
-							hhandi1 = hhandi2;
-							hhandi2 = -hhandi2;
-						}
-						if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
-							h1 = checkArbitrage(hfodd1, bfodd2);
-							if (h1 > 0) {
-								pmatch->arinf[pmatch->arcnt].ar = h1;
-								pmatch->arinf[pmatch->arcnt].odd1 = hfodd1;
-								pmatch->arinf[pmatch->arcnt].odd2 = bfodd2;
-								pmatch->arinf[pmatch->arcnt].c1 = 'H';
-								pmatch->arinf[pmatch->arcnt++].c2 = 'B';
-								pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+							bfodd1 = atof(bodd1.c_str());
+							bfodd2 = atof(bodd2.c_str());
+							hfodd1 = atof(shodd.c_str());
+							hfodd2 = atof(scodd.c_str());
+							if (sstrong == "H") {
+								hhandi1 = hhandi2;
+								hhandi2 = -hhandi2;
 							}
-						}
-						else if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
-							h1 = checkArbitrage(bfodd1, hfodd2);
-							if (h1 > 0) {
-								pmatch->arinf[pmatch->arcnt].ar = h1;
-								pmatch->arinf[pmatch->arcnt].odd1 = bfodd1;
-								pmatch->arinf[pmatch->arcnt].odd2 = hfodd2;
-								pmatch->arinf[pmatch->arcnt].c1 = 'B';
-								pmatch->arinf[pmatch->arcnt++].c2 = 'H';
-								pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+							if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
+								h1 = checkArbitrage(hfodd1, bfodd2);
+								if (h1 <= MIN_ARBIT) {
+									pmatch->arinf[pmatch->arcnt].ar = h1;
+									pmatch->arinf[pmatch->arcnt].ov = fabs(hhandi1);
+									pmatch->arinf[pmatch->arcnt].odd1 = hfodd1;
+									pmatch->arinf[pmatch->arcnt].odd2 = bfodd2;
+									pmatch->arinf[pmatch->arcnt].nwhere = 4;
+									pmatch->arinf[pmatch->arcnt].c1 = 'H';
+									pmatch->arinf[pmatch->arcnt++].c2 = 'B';
+						
+									pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+								}
 							}
-						}
-						else {
-							if (fabs(bhandi1) - fabs(hhandi1) < 0) {
-								//This means hga offer high value.
-								if (hhandi1 > 0) {
-									v1 = hhandi1;
-									o1 = hfodd1;
-									v2 = bhandi2;
-									o2 = bfodd2;
-									pmatch->inf[4][pmatch->mcnt[4]].c1 = 'H';
-									pmatch->inf[4][pmatch->mcnt[4]].c2 = 'B';
+							if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
+								h1 = checkArbitrage(bfodd1, hfodd2);
+								if (h1 <= MIN_ARBIT) {
+									pmatch->arinf[pmatch->arcnt].ar = h1;
+									pmatch->arinf[pmatch->arcnt].ov = fabs(bhandi1);
+									pmatch->arinf[pmatch->arcnt].odd1 = bfodd1;
+									pmatch->arinf[pmatch->arcnt].odd2 = hfodd2;
+									pmatch->arinf[pmatch->arcnt].nwhere = 4;
+									pmatch->arinf[pmatch->arcnt].c1 = 'B';
+									pmatch->arinf[pmatch->arcnt++].c2 = 'H';
+									pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+								}
+							}
+							if (!(fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001 || fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001)) {
+								if (fabs(bhandi1) - fabs(hhandi1) < 0) {
+									//This means hga offer high value.
+									if (hhandi1 > 0) {
+										v1 = hhandi1;
+										o1 = hfodd1;
+										v2 = bhandi2;
+										o2 = bfodd2;
+										pmatch->inf[4][pmatch->mcnt[4]].c1 = 'H';
+										pmatch->inf[4][pmatch->mcnt[4]].c2 = 'B';
+									}
+									else {
+										v1 = hhandi2;
+										o1 = hfodd2;
+										v2 = bhandi1;
+										o2 = bfodd1;
+										pmatch->inf[4][pmatch->mcnt[4]].c1 = 'H';
+										pmatch->inf[4][pmatch->mcnt[4]].c2 = 'B';
+									}
 								}
 								else {
-									v1 = hhandi2;
-									o1 = hfodd2;
-									v2 = bhandi1;
-									o2 = bfodd1;
-									pmatch->inf[4][pmatch->mcnt[4]].c1 = 'H';
-									pmatch->inf[4][pmatch->mcnt[4]].c2 = 'B';
+									if (bhandi1 > 0) {
+										v1 = bhandi1;
+										o1 = bfodd1;
+										v2 = hhandi2;
+										o2 = hfodd2;
+										pmatch->inf[4][pmatch->mcnt[4]].c1 = 'B';
+										pmatch->inf[4][pmatch->mcnt[4]].c2 = 'H';
+									}
+									else {
+										v1 = bhandi2;
+										o1 = bfodd2;
+										v2 = hhandi1;
+										o2 = hfodd1;
+										pmatch->inf[4][pmatch->mcnt[4]].c1 = 'B';
+										pmatch->inf[4][pmatch->mcnt[4]].c2 = 'H';
+									}
+								}
+								stake1 = 100; stake2 = stake1 * o1 / o2;
+								h1 = calc_middle(stake1, stake2, o1, o2, v1, v2);
+								pmatch->inf[4][pmatch->mcnt[4]].middle = h1;
+								pmatch->inf[4][pmatch->mcnt[4]].handi1 = v1;
+								pmatch->inf[4][pmatch->mcnt[4]].handi2 = v2;;
+								pmatch->inf[4][pmatch->mcnt[4]].odd1 = o1;
+								pmatch->inf[4][pmatch->mcnt[4]++].odd2 = o2;
+								pmatch->inf[4] = (middle_inf*)realloc(pmatch->inf[4], (pmatch->mcnt[4] + 1) * sizeof(middle_inf));
+							}
+						}
+						/////////////////////////////////////////////////////////////
+						// asian_total_corners
+						/////////////////////////////////////////////////////////////
+						if (sp.HasMember("asian_total_corners")) {
+							bodd1 = sp["asian_total_corners"]["odds"][0]["odds"].GetString();
+							bodd2 = sp["asian_total_corners"]["odds"][1]["odds"].GetString();
+							bhandicap1 = sp["asian_total_corners"]["odds"][0]["name"].GetString();
+							bhandicap2 = sp["asian_total_corners"]["odds"][1]["name"].GetString();
+							bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+							bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+
+							bfodd1 = atof(bodd1.c_str());
+							bfodd2 = atof(bodd2.c_str());
+							hfodd1 = atof(sgoaloodd.c_str());
+							hfodd2 = atof(sgoaluodd.c_str());
+							sgoalo = ReplaceAll(sgoalo, "O", "");
+							sgoalu = ReplaceAll(sgoalu, "U", "");
+							hhandi1 = get_handicap_from_string(sgoalo.c_str(), '/');
+							hhandi2 = get_handicap_from_string(sgoalu.c_str(), '/');
+
+							if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
+								h1 = checkArbitrage(hfodd1, bfodd2);
+								if (h1 <= MIN_ARBIT) {
+									pmatch->arinf[pmatch->arcnt].ar = h1;
+									pmatch->arinf[pmatch->arcnt].ov = fabs(hhandi1);
+									pmatch->arinf[pmatch->arcnt].odd1 = hfodd1;
+									pmatch->arinf[pmatch->arcnt].odd2 = bfodd2;
+									pmatch->arinf[pmatch->arcnt].nwhere = 5;
+									pmatch->arinf[pmatch->arcnt].c1 = 'H';
+									pmatch->arinf[pmatch->arcnt++].c2 = 'B';
+									pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
 								}
 							}
-							else {
-								if (bhandi1 > 0) {
+							if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
+								h1 = checkArbitrage(bfodd1, hfodd2);
+								if (h1 <= MIN_ARBIT) {
+									pmatch->arinf[pmatch->arcnt].ar = h1;
+									pmatch->arinf[pmatch->arcnt].ov = fabs(bhandi1);
+									pmatch->arinf[pmatch->arcnt].odd1 = bfodd1;
+									pmatch->arinf[pmatch->arcnt].odd2 = hfodd2;
+									pmatch->arinf[pmatch->arcnt].nwhere = 5;
+									pmatch->arinf[pmatch->arcnt].c1 = 'B';
+									pmatch->arinf[pmatch->arcnt++].c2 = 'H';
+									pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+								}
+							}
+							if (!((fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) || (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001))) {
+								if (bhandi1 < hhandi2) {
 									v1 = bhandi1;
 									o1 = bfodd1;
 									v2 = hhandi2;
 									o2 = hfodd2;
-									pmatch->inf[4][pmatch->mcnt[4]].c1 = 'B';
-									pmatch->inf[4][pmatch->mcnt[4]].c2 = 'H';
+									pmatch->inf[5][pmatch->mcnt[5]].c1 = 'B';
+									pmatch->inf[5][pmatch->mcnt[5]].c2 = 'H';
 								}
 								else {
-									v1 = bhandi2;
-									o1 = bfodd2;
-									v2 = hhandi1;
-									o2 = hfodd1;
-									pmatch->inf[4][pmatch->mcnt[4]].c1 = 'B';
-									pmatch->inf[4][pmatch->mcnt[4]].c2 = 'H';
+									v1 = hhandi1;
+									o1 = hfodd1;
+									v2 = bhandi2;
+									o2 = bfodd2;
+									pmatch->inf[5][pmatch->mcnt[5]].c1 = 'H';
+									pmatch->inf[5][pmatch->mcnt[5]].c2 = 'B';
+								}
+								stake1 = 100; stake2 = stake1 * o1 / o2;
+								h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+
+								pmatch->inf[5][pmatch->mcnt[5]].middle = h1;
+								pmatch->inf[5][pmatch->mcnt[5]].handi1 = v1;
+								pmatch->inf[5][pmatch->mcnt[5]].handi2 = v2;;
+								pmatch->inf[5][pmatch->mcnt[5]].odd1 = o1;
+								pmatch->inf[5][pmatch->mcnt[5]].nalt = 2;
+								pmatch->inf[5][pmatch->mcnt[5]++].odd2 = o2;
+								pmatch->inf[5] = (middle_inf*)realloc(pmatch->inf[5], (pmatch->mcnt[5] + 1) * sizeof(middle_inf));
+							}
+						}
+						////////////////////////////////////////////////////////////////
+						// 1st_half_asian_corners
+						///////////////////////////////////////////////////////////////
+						if (sp.HasMember("asian_total_corners")) {
+							sgoalo = cn_data["RATIO_HOUO"].IsNull() ? "null" : cn_data["RATIO_HOUO"].GetString();
+							sgoalu = cn_data["RATIO_HOUU"].IsNull() ? "null" : cn_data["RATIO_HOUU"].GetString();
+							sgoaloodd = cn_data["IOR_HOUH"].IsNull() ? "null" : cn_data["IOR_HOUH"].GetString();
+							sgoaluodd = cn_data["IOR_HOUC"].IsNull() ? "null" : cn_data["IOR_HOUC"].GetString();
+
+							bodd1 = sp["1st_half_asian_corners"]["odds"][0]["odds"].GetString();
+							bodd2 = sp["1st_half_asian_corners"]["odds"][1]["odds"].GetString();
+							bhandicap1 = sp["1st_half_asian_corners"]["odds"][0]["name"].GetString();
+							bhandicap2 = sp["1st_half_asian_corners"]["odds"][1]["name"].GetString();
+							bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+							bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+
+							bfodd1 = atof(bodd1.c_str());
+							bfodd2 = atof(bodd2.c_str());
+							hfodd1 = atof(sgoaloodd.c_str());
+							hfodd2 = atof(sgoaluodd.c_str());
+							sgoalo = ReplaceAll(sgoalo, "O", "");
+							sgoalu = ReplaceAll(sgoalu, "U", "");
+							hhandi1 = get_handicap_from_string(sgoalo.c_str(), '/');
+							hhandi2 = get_handicap_from_string(sgoalu.c_str(), '/');
+							if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
+								h1 = checkArbitrage(hfodd1, bfodd2);
+								if (h1 <= MIN_ARBIT) {
+									pmatch->arinf[pmatch->arcnt].ar = h1;
+									pmatch->arinf[pmatch->arcnt].ov = fabs(hhandi1);
+									pmatch->arinf[pmatch->arcnt].odd1 = hfodd1;
+									pmatch->arinf[pmatch->arcnt].odd2 = bfodd2;
+									pmatch->arinf[pmatch->arcnt].nwhere = 6;
+									pmatch->arinf[pmatch->arcnt].c1 = 'H';
+									pmatch->arinf[pmatch->arcnt++].c2 = 'B';
+									pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
 								}
 							}
-							stake1 = 100; stake2 = stake1 * o1 / o2;
-							h1 = calc_middle(stake1, stake2, o1, o2, v1, v2);
-							pmatch->inf[4][pmatch->mcnt[4]].middle = h1;
-							pmatch->inf[4][pmatch->mcnt[4]].handi1 = v1;
-							pmatch->inf[4][pmatch->mcnt[4]].handi2 = v2;;
-							pmatch->inf[4][pmatch->mcnt[4]].odd1 = o1;
-							pmatch->inf[4][pmatch->mcnt[4]++].odd2 = o2;
-							pmatch->inf[4] = (middle_inf*)realloc(pmatch->inf[4], (pmatch->mcnt[4] + 1) * sizeof(middle_inf));
-						}
-					}
-					/////////////////////////////////////////////////////////////
-					// asian_total_corners
-					/////////////////////////////////////////////////////////////
-					if (sp.HasMember("asian_total_corners")) {
-						bodd1 = sp["asian_total_corners"]["odds"][0]["odds"].GetString();
-						bodd2 = sp["asian_total_corners"]["odds"][1]["odds"].GetString();
-						bhandicap1 = sp["asian_total_corners"]["odds"][0]["name"].GetString();
-						bhandicap2 = sp["asian_total_corners"]["odds"][1]["name"].GetString();
-						bhandi1 = get_handicap_from_string(bhandicap1.c_str());
-						bhandi2 = get_handicap_from_string(bhandicap2.c_str());
-
-						bfodd1 = atof(bodd1.c_str());
-						bfodd2 = atof(bodd2.c_str());
-						hfodd1 = atof(sgoaloodd.c_str());
-						hfodd2 = atof(sgoaluodd.c_str());
-						sgoalo = ReplaceAll(sgoalo, "O", "");
-						sgoalu = ReplaceAll(sgoalu, "U", "");
-						hhandi1 = get_handicap_from_string(sgoalo.c_str(), '/');
-						hhandi2 = get_handicap_from_string(sgoalu.c_str(), '/');
-
-						if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
-							h1 = checkArbitrage(hfodd1, bfodd2);
-							if (h1 > 0) {
-								pmatch->arinf[pmatch->arcnt].ar = h1;
-								pmatch->arinf[pmatch->arcnt].odd1 = hfodd1;
-								pmatch->arinf[pmatch->arcnt].odd2 = bfodd2;
-								pmatch->arinf[pmatch->arcnt].c1 = 'H';
-								pmatch->arinf[pmatch->arcnt++].c2 = 'B';
-								pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+							if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
+								h1 = checkArbitrage(bfodd1, hfodd2);
+								if (h1 <= MIN_ARBIT) {
+									pmatch->arinf[pmatch->arcnt].ar = h1;
+									pmatch->arinf[pmatch->arcnt].ov = fabs(bhandi1);
+									pmatch->arinf[pmatch->arcnt].odd1 = bfodd1;
+									pmatch->arinf[pmatch->arcnt].odd2 = hfodd2;
+									pmatch->arinf[pmatch->arcnt].nwhere = 6;
+									pmatch->arinf[pmatch->arcnt].c1 = 'B';
+									pmatch->arinf[pmatch->arcnt++].c2 = 'H';
+									pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+								}
 							}
-						}
-						else if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
-							h1 = checkArbitrage(bfodd1, hfodd2);
-							if (h1 > 0) {
-								pmatch->arinf[pmatch->arcnt].ar = h1;
-								pmatch->arinf[pmatch->arcnt].odd1 = bfodd1;
-								pmatch->arinf[pmatch->arcnt].odd2 = hfodd2;
-								pmatch->arinf[pmatch->arcnt].c1 = 'B';
-								pmatch->arinf[pmatch->arcnt++].c2 = 'H';
-								pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+							if (!(fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001 || fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001)) {
+								if (bhandi1 < hhandi2) {
+									v1 = bhandi1;
+									o1 = bfodd1;
+									v2 = hhandi2;
+									o2 = hfodd2;
+									pmatch->inf[6][pmatch->mcnt[6]].c1 = 'B';
+									pmatch->inf[6][pmatch->mcnt[6]].c2 = 'H';
+								}
+								else {
+									v1 = hhandi1;
+									o1 = hfodd1;
+									v2 = bhandi2;
+									o2 = bfodd2;
+									pmatch->inf[6][pmatch->mcnt[6]].c1 = 'H';
+									pmatch->inf[6][pmatch->mcnt[6]].c2 = 'B';
+								}
+								stake1 = 100; stake2 = stake1 * o1 / o2;
+								h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+								pmatch->inf[6][pmatch->mcnt[6]].middle = h1;
+								pmatch->inf[6][pmatch->mcnt[6]].handi1 = v1;
+								pmatch->inf[6][pmatch->mcnt[6]].handi2 = v2;;
+								pmatch->inf[6][pmatch->mcnt[6]].odd1 = o1;
+								pmatch->inf[6][pmatch->mcnt[6]].nalt = 2;
+								pmatch->inf[6][pmatch->mcnt[6]++].odd2 = o2;
+								pmatch->inf[6] = (middle_inf*)realloc(pmatch->inf[6], (pmatch->mcnt[6] + 1) * sizeof(middle_inf));
 							}
-						}
-						else {
-							if (bhandi1 < hhandi2) {
-								v1 = bhandi1;
-								o1 = bfodd1;
-								v2 = hhandi2;
-								o2 = hfodd2;
-								pmatch->inf[5][pmatch->mcnt[5]].c1 = 'B';
-								pmatch->inf[5][pmatch->mcnt[5]].c2 = 'H';
-							}
-							else {
-								v1 = hhandi1;
-								o1 = hfodd1;
-								v2 = bhandi2;
-								o2 = bfodd2;
-								pmatch->inf[5][pmatch->mcnt[5]].c1 = 'H';
-								pmatch->inf[5][pmatch->mcnt[5]].c2 = 'B';
-							}
-							stake1 = 100; stake2 = stake1 * o1 / o2;
-							h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
-							
-							pmatch->inf[5][pmatch->mcnt[5]].middle = h1;
-							pmatch->inf[5][pmatch->mcnt[5]].handi1 = v1;
-							pmatch->inf[5][pmatch->mcnt[5]].handi2 = v2;;
-							pmatch->inf[5][pmatch->mcnt[5]].odd1 = o1;
-							pmatch->inf[5][pmatch->mcnt[5]].nalt = 2;
-							pmatch->inf[5][pmatch->mcnt[5]++].odd2 = o2;
-							pmatch->inf[5] = (middle_inf*)realloc(pmatch->inf[5], (pmatch->mcnt[5] + 1) * sizeof(middle_inf));
-						}
-					}
-					////////////////////////////////////////////////////////////////
-					// 1st_half_asian_corners
-					///////////////////////////////////////////////////////////////
-					if (sp.HasMember("asian_total_corners")) {
-						sgoalo = cn_data["RATIO_HOUO"].IsNull() ? "null" : cn_data["RATIO_HOUO"].GetString();
-						sgoalu = cn_data["RATIO_HOUU"].IsNull() ? "null" : cn_data["RATIO_HOUU"].GetString();
-						sgoaloodd = cn_data["IOR_HOUH"].IsNull() ? "null" : cn_data["IOR_HOUH"].GetString();
-						sgoaluodd = cn_data["IOR_HOUC"].IsNull() ? "null" : cn_data["IOR_HOUC"].GetString();
-
-						bodd1 = sp["1st_half_asian_corners"]["odds"][0]["odds"].GetString();
-						bodd2 = sp["1st_half_asian_corners"]["odds"][1]["odds"].GetString();
-						bhandicap1 = sp["1st_half_asian_corners"]["odds"][0]["name"].GetString();
-						bhandicap2 = sp["1st_half_asian_corners"]["odds"][1]["name"].GetString();
-						bhandi1 = get_handicap_from_string(bhandicap1.c_str());
-						bhandi2 = get_handicap_from_string(bhandicap2.c_str());
-
-						bfodd1 = atof(bodd1.c_str());
-						bfodd2 = atof(bodd2.c_str());
-						hfodd1 = atof(sgoaloodd.c_str());
-						hfodd2 = atof(sgoaluodd.c_str());
-						sgoalo = ReplaceAll(sgoalo, "O", "");
-						sgoalu = ReplaceAll(sgoalu, "U", "");
-						hhandi1 = get_handicap_from_string(sgoalo.c_str(), '/');
-						hhandi2 = get_handicap_from_string(sgoalu.c_str(), '/');
-						if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
-							h1 = checkArbitrage(hfodd1, bfodd2);
-							if (h1 > 0) {
-								pmatch->arinf[pmatch->arcnt].ar = h1;
-								pmatch->arinf[pmatch->arcnt].odd1 = hfodd1;
-								pmatch->arinf[pmatch->arcnt].odd2 = bfodd2;
-								pmatch->arinf[pmatch->arcnt].c1 = 'H';
-								pmatch->arinf[pmatch->arcnt++].c2 = 'B';
-								pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
-							}
-						}
-						else if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
-							h1 = checkArbitrage(bfodd1, hfodd2);
-							if (h1 > 0) {
-								pmatch->arinf[pmatch->arcnt].ar = h1;
-								pmatch->arinf[pmatch->arcnt].odd1 = bfodd1;
-								pmatch->arinf[pmatch->arcnt].odd2 = hfodd2;
-								pmatch->arinf[pmatch->arcnt].c1 = 'B';
-								pmatch->arinf[pmatch->arcnt++].c2 = 'H';
-								pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
-							}
-						}
-						else {
-							if (bhandi1 < hhandi2) {
-								v1 = bhandi1;
-								o1 = bfodd1;
-								v2 = hhandi2;
-								o2 = hfodd2;
-								pmatch->inf[6][pmatch->mcnt[6]].c1 = 'B';
-								pmatch->inf[6][pmatch->mcnt[6]].c2 = 'H';
-							}
-							else {
-								v1 = hhandi1;
-								o1 = hfodd1;
-								v2 = bhandi2;
-								o2 = bfodd2;
-								pmatch->inf[6][pmatch->mcnt[6]].c1 = 'H';
-								pmatch->inf[6][pmatch->mcnt[6]].c2 = 'B';
-							}
-							stake1 = 100; stake2 = stake1 * o1 / o2;
-							h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
-							pmatch->inf[6][pmatch->mcnt[6]].middle = h1;
-							pmatch->inf[6][pmatch->mcnt[6]].handi1 = v1;
-							pmatch->inf[6][pmatch->mcnt[6]].handi2 = v2;;
-							pmatch->inf[6][pmatch->mcnt[6]].odd1 = o1;
-							pmatch->inf[6][pmatch->mcnt[6]].nalt = 2;
-							pmatch->inf[6][pmatch->mcnt[6]++].odd2 = o2;
-							pmatch->inf[6] = (middle_inf*)realloc(pmatch->inf[6], (pmatch->mcnt[6] + 1) * sizeof(middle_inf));
 						}
 					}
 				}
@@ -2069,171 +1920,181 @@ void COppCheckDlg::ReadDataDisplay()
 					const Value& rn_data = hga[i]["RN_DATA"];
 					sstrong = rn_data["STRONG"].IsNull() ? "null" : rn_data["STRONG"].GetString();
 					shandicap = rn_data["RATIO_R"].IsNull() ? "null" : rn_data["RATIO_R"].GetString();
-					shodd = rn_data["IOR_RH"].IsNull() ? "null" : rn_data["IOR_RH"].GetString();
-					scodd = rn_data["IOR_RC"].IsNull() ? "null" : rn_data["IOR_RC"].GetString();
-					if (sp.HasMember("asian_handicap_cards")) {
-						bodd1 = sp["asian_handicap_cards"]["odds"][0]["odds"].GetString();
-						bodd2 = sp["asian_handicap_cards"]["odds"][1]["odds"].GetString();
-						bhandicap1 = sp["asian_handicap_cards"]["odds"][0]["handicap"].GetString();
-						bhandicap2 = sp["asian_handicap_cards"]["odds"][1]["handicap"].GetString();
-						bhandi1 = get_handicap_from_string(bhandicap1.c_str());
-						bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+					if (shandicap != "null") {
+						shodd = rn_data["IOR_RH"].IsNull() ? "null" : rn_data["IOR_RH"].GetString();
+						scodd = rn_data["IOR_RC"].IsNull() ? "null" : rn_data["IOR_RC"].GetString();
+						sgoalo = rn_data["RATIO_OUO"].IsNull() ? "null" : rn_data["RATIO_OUO"].GetString();
+						sgoalu = rn_data["RATIO_OUU"].IsNull() ? "null" : rn_data["RATIO_OUU"].GetString();
+						sgoaloodd = rn_data["IOR_OUH"].IsNull() ? "null" : rn_data["IOR_OUH"].GetString();
+						sgoaluodd = rn_data["IOR_OUC"].IsNull() ? "null" : rn_data["IOR_OUC"].GetString();
 
-						hhandi1 = get_handicap_from_string(shandicap.c_str(),'/');
-						hhandi2 = -hhandi1;
+						if (sp.HasMember("asian_handicap_cards")) {
+							bodd1 = sp["asian_handicap_cards"]["odds"][0]["odds"].GetString();
+							bodd2 = sp["asian_handicap_cards"]["odds"][1]["odds"].GetString();
+							bhandicap1 = sp["asian_handicap_cards"]["odds"][0]["handicap"].GetString();
+							bhandicap2 = sp["asian_handicap_cards"]["odds"][1]["handicap"].GetString();
+							bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+							bhandi2 = get_handicap_from_string(bhandicap2.c_str());
 
-						bfodd1 = atof(bodd1.c_str());
-						bfodd2 = atof(bodd2.c_str());
-						hfodd1 = atof(shodd.c_str());
-						hfodd2 = atof(scodd.c_str());
-						if (sstrong == "H") {
-							hhandi1 = hhandi2;
-							hhandi2 = -hhandi2;
-						}
-						//Check Arbitrage chance first
-						if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
-							h1 = checkArbitrage(hfodd1, bfodd2);
-							if (h1 > 0) {
-								pmatch->arinf[pmatch->arcnt].ar = h1;
-								pmatch->arinf[pmatch->arcnt].odd1 = hfodd1;
-								pmatch->arinf[pmatch->arcnt].odd2 = bfodd2;
-								pmatch->arinf[pmatch->arcnt].c1 = 'H';
-								pmatch->arinf[pmatch->arcnt++].c2 = 'B';
-								pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+							hhandi1 = get_handicap_from_string(shandicap.c_str(), '/');
+							hhandi2 = -hhandi1;
+
+							bfodd1 = atof(bodd1.c_str());
+							bfodd2 = atof(bodd2.c_str());
+							hfodd1 = atof(shodd.c_str());
+							hfodd2 = atof(scodd.c_str());
+							if (sstrong == "H") {
+								hhandi1 = hhandi2;
+								hhandi2 = -hhandi2;
 							}
-						}
-						else if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
-							h1 = checkArbitrage(bfodd1, hfodd2);
-							if (h1 > 0) {
-								pmatch->arinf[pmatch->arcnt].ar = h1;
-								pmatch->arinf[pmatch->arcnt].odd1 = bfodd1;
-								pmatch->arinf[pmatch->arcnt].odd2 = hfodd2;
-								pmatch->arinf[pmatch->arcnt].c1 = 'B';
-								pmatch->arinf[pmatch->arcnt++].c2 = 'H';
-								pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+							//Check Arbitrage chance first
+							if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
+								h1 = checkArbitrage(hfodd1, bfodd2);
+								if (h1 <= MIN_ARBIT) {
+									pmatch->arinf[pmatch->arcnt].ar = h1;
+									pmatch->arinf[pmatch->arcnt].ov = fabs(hhandi1);
+									pmatch->arinf[pmatch->arcnt].odd1 = hfodd1;
+									pmatch->arinf[pmatch->arcnt].odd2 = bfodd2;
+									pmatch->arinf[pmatch->arcnt].nwhere = 7;
+									pmatch->arinf[pmatch->arcnt].c1 = 'H';
+									pmatch->arinf[pmatch->arcnt++].c2 = 'B';
+									pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+								}
 							}
-						}
-						else {
-							if (fabs(bhandi1) - fabs(hhandi1) < 0) {
-								//This means hga offer high value.
-								if (hhandi1 > 0) {
-									v1 = hhandi1;
-									o1 = hfodd1;
-									v2 = bhandi2;
-									o2 = bfodd2;
-									pmatch->inf[7][pmatch->mcnt[7]].c1 = 'H';
-									pmatch->inf[7][pmatch->mcnt[7]].c2 = 'B';
+							if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
+								h1 = checkArbitrage(bfodd1, hfodd2);
+								if (h1 <= MIN_ARBIT) {
+									pmatch->arinf[pmatch->arcnt].ar = h1;
+									pmatch->arinf[pmatch->arcnt].ov = fabs(bhandi1);
+									pmatch->arinf[pmatch->arcnt].odd1 = bfodd1;
+									pmatch->arinf[pmatch->arcnt].odd2 = hfodd2;
+									pmatch->arinf[pmatch->arcnt].nwhere = 7;
+									pmatch->arinf[pmatch->arcnt].c1 = 'B';
+									pmatch->arinf[pmatch->arcnt++].c2 = 'H';
+									pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+								}
+							}
+							if (!(fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001 || fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001)) {
+								if (fabs(bhandi1) - fabs(hhandi1) < 0) {
+									//This means hga offer high value.
+									if (hhandi1 > 0) {
+										v1 = hhandi1;
+										o1 = hfodd1;
+										v2 = bhandi2;
+										o2 = bfodd2;
+										pmatch->inf[7][pmatch->mcnt[7]].c1 = 'H';
+										pmatch->inf[7][pmatch->mcnt[7]].c2 = 'B';
+									}
+									else {
+										v1 = hhandi2;
+										o1 = hfodd2;
+										v2 = bhandi1;
+										o2 = bfodd1;
+										pmatch->inf[7][pmatch->mcnt[7]].c1 = 'H';
+										pmatch->inf[7][pmatch->mcnt[7]].c2 = 'B';
+									}
 								}
 								else {
-									v1 = hhandi2;
-									o1 = hfodd2;
-									v2 = bhandi1;
-									o2 = bfodd1;
-									pmatch->inf[7][pmatch->mcnt[7]].c1 = 'H';
-									pmatch->inf[7][pmatch->mcnt[7]].c2 = 'B';
+									if (bhandi1 > 0) {
+										v1 = bhandi1;
+										o1 = bfodd1;
+										v2 = hhandi2;
+										o2 = hfodd2;
+										pmatch->inf[7][pmatch->mcnt[7]].c1 = 'B';
+										pmatch->inf[7][pmatch->mcnt[7]].c2 = 'H';
+									}
+									else {
+										v1 = bhandi2;
+										o1 = bfodd2;
+										v2 = hhandi1;
+										o2 = hfodd1;
+										pmatch->inf[7][pmatch->mcnt[7]].c1 = 'B';
+										pmatch->inf[7][pmatch->mcnt[7]].c2 = 'H';
+									}
+								}
+								stake1 = 100; stake2 = stake1 * o1 / o2;
+								h1 = calc_middle(stake1, stake2, o1, o2, v1, v2);
+								pmatch->inf[7][pmatch->mcnt[7]].middle = h1;
+								pmatch->inf[7][pmatch->mcnt[7]].handi1 = v1;
+								pmatch->inf[7][pmatch->mcnt[7]].handi2 = v2;;
+								pmatch->inf[7][pmatch->mcnt[7]].odd1 = o1;
+								pmatch->inf[7][pmatch->mcnt[7]++].odd2 = o2;
+								pmatch->inf[7] = (middle_inf*)realloc(pmatch->inf[7], (pmatch->mcnt[7] + 1) * sizeof(middle_inf));
+							}
+						}
+						////////////////////////////////////////////////////////////////////////////////
+						// asian_total_cards
+						///////////////////////////////////////////////////////////////////////////////					
+
+						if (sp.HasMember("asian_total_cards")) {
+							bodd1 = sp["asian_total_cards"]["odds"][0]["odds"].GetString();
+							bodd2 = sp["asian_total_cards"]["odds"][1]["odds"].GetString();
+							bhandicap1 = sp["asian_total_cards"]["odds"][0]["name"].GetString();
+							bhandicap2 = sp["asian_total_cards"]["odds"][1]["name"].GetString();
+							bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+							bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+
+							bfodd1 = atof(bodd1.c_str());
+							bfodd2 = atof(bodd2.c_str());
+							hfodd1 = atof(sgoaloodd.c_str());
+							hfodd2 = atof(sgoaluodd.c_str());
+							sgoalo = ReplaceAll(sgoalo, "O", "");
+							sgoalu = ReplaceAll(sgoalu, "U", "");
+							hhandi1 = get_handicap_from_string(sgoalo.c_str(), '/');
+							hhandi2 = get_handicap_from_string(sgoalu.c_str(), '/');
+							if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
+								h1 = checkArbitrage(hfodd1, bfodd2);
+								if (h1 <= MIN_ARBIT) {
+									pmatch->arinf[pmatch->arcnt].ar = h1;
+									pmatch->arinf[pmatch->arcnt].ov = fabs(hhandi1);
+									pmatch->arinf[pmatch->arcnt].odd1 = hfodd1;
+									pmatch->arinf[pmatch->arcnt].odd2 = bfodd2;
+									pmatch->arinf[pmatch->arcnt].nwhere = 8;
+									pmatch->arinf[pmatch->arcnt].c1 = 'H';
+									pmatch->arinf[pmatch->arcnt++].c2 = 'B';
+									pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
 								}
 							}
-							else {
-								if (bhandi1 > 0) {
+							if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
+								h1 = checkArbitrage(bfodd1, hfodd2);
+								if (h1 <= MIN_ARBIT) {
+									pmatch->arinf[pmatch->arcnt].ar = h1;
+									pmatch->arinf[pmatch->arcnt].ov = fabs(bhandi1);
+									pmatch->arinf[pmatch->arcnt].odd1 = bfodd1;
+									pmatch->arinf[pmatch->arcnt].odd2 = hfodd2;
+									pmatch->arinf[pmatch->arcnt].nwhere = 8;
+									pmatch->arinf[pmatch->arcnt].c1 = 'B';
+									pmatch->arinf[pmatch->arcnt++].c2 = 'H';
+									pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
+								}
+							}
+							if (!(fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001 || fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001)) {
+								if (bhandi1 < hhandi2) {
 									v1 = bhandi1;
 									o1 = bfodd1;
 									v2 = hhandi2;
 									o2 = hfodd2;
-									pmatch->inf[7][pmatch->mcnt[7]].c1 = 'B';
-									pmatch->inf[7][pmatch->mcnt[7]].c2 = 'H';
+									pmatch->inf[8][pmatch->mcnt[8]].c1 = 'B';
+									pmatch->inf[8][pmatch->mcnt[8]].c2 = 'H';
 								}
 								else {
-									v1 = bhandi2;
-									o1 = bfodd2;
-									v2 = hhandi1;
-									o2 = hfodd1;
-									pmatch->inf[7][pmatch->mcnt[7]].c1 = 'B';
-									pmatch->inf[7][pmatch->mcnt[7]].c2 = 'H';
+									v1 = hhandi1;
+									o1 = hfodd1;
+									v2 = bhandi2;
+									o2 = bfodd2;
+									pmatch->inf[8][pmatch->mcnt[8]].c1 = 'H';
+									pmatch->inf[8][pmatch->mcnt[8]].c2 = 'B';
 								}
+								stake1 = 100; stake2 = stake1 * o1 / o2;
+								h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+								pmatch->inf[8][pmatch->mcnt[8]].middle = h1;
+								pmatch->inf[8][pmatch->mcnt[8]].handi1 = v1;
+								pmatch->inf[8][pmatch->mcnt[8]].handi2 = v2;;
+								pmatch->inf[8][pmatch->mcnt[8]].odd1 = o1;
+								pmatch->inf[8][pmatch->mcnt[8]].nalt = 2;
+								pmatch->inf[8][pmatch->mcnt[8]++].odd2 = o2;
+								pmatch->inf[8] = (middle_inf*)realloc(pmatch->inf[8], (pmatch->mcnt[8] + 1) * sizeof(middle_inf));
 							}
-							stake1 = 100; stake2 = stake1 * o1 / o2;
-							h1 = calc_middle(stake1, stake2, o1, o2, v1, v2);
-							pmatch->inf[7][pmatch->mcnt[7]].middle = h1;
-							pmatch->inf[7][pmatch->mcnt[7]].handi1 = v1;
-							pmatch->inf[7][pmatch->mcnt[7]].handi2 = v2;;
-							pmatch->inf[7][pmatch->mcnt[7]].odd1 = o1;
-							pmatch->inf[7][pmatch->mcnt[7]++].odd2 = o2;
-							pmatch->inf[7] = (middle_inf*)realloc(pmatch->inf[7], (pmatch->mcnt[7] + 1) * sizeof(middle_inf));
-						}
-					}
-					////////////////////////////////////////////////////////////////////////////////
-					// asian_total_cards
-					////////////////////////////////////////////////////////////////////////////////
-
-					sgoalo = rn_data["RATIO_OUO"].IsNull() ? "null" : rn_data["RATIO_OUO"].GetString();
-					sgoalu = rn_data["RATIO_OUU"].IsNull() ? "null" : rn_data["RATIO_OUU"].GetString();
-					sgoaloodd = rn_data["IOR_OUH"].IsNull() ? "null" : rn_data["IOR_OUH"].GetString();
-					sgoaluodd = rn_data["IOR_OUC"].IsNull() ? "null" : rn_data["IOR_OUC"].GetString();
-
-					if (sp.HasMember("asian_total_cards")) {
-						bodd1 = sp["asian_total_cards"]["odds"][0]["odds"].GetString();
-						bodd2 = sp["asian_total_cards"]["odds"][1]["odds"].GetString();
-						bhandicap1 = sp["asian_total_cards"]["odds"][0]["name"].GetString();
-						bhandicap2 = sp["asian_total_cards"]["odds"][1]["name"].GetString();
-						bhandi1 = get_handicap_from_string(bhandicap1.c_str());
-						bhandi2 = get_handicap_from_string(bhandicap2.c_str());
-
-						bfodd1 = atof(bodd1.c_str());
-						bfodd2 = atof(bodd2.c_str());
-						hfodd1 = atof(sgoaloodd.c_str());
-						hfodd2 = atof(sgoaluodd.c_str());
-						sgoalo = ReplaceAll(sgoalo, "O", "");
-						sgoalu = ReplaceAll(sgoalu, "U", "");
-						hhandi1 = get_handicap_from_string(sgoalo.c_str(), '/');
-						hhandi2 = get_handicap_from_string(sgoalu.c_str(), '/');
-						if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
-							h1 = checkArbitrage(hfodd1, bfodd2);
-							if (h1 > 0) {
-								pmatch->arinf[pmatch->arcnt].ar = h1;
-								pmatch->arinf[pmatch->arcnt].odd1 = hfodd1;
-								pmatch->arinf[pmatch->arcnt].odd2 = bfodd2;
-								pmatch->arinf[pmatch->arcnt].c1 = 'H';
-								pmatch->arinf[pmatch->arcnt++].c2 = 'B';
-								pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
-							}
-						}
-						else if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
-							h1 = checkArbitrage(bfodd1, hfodd2);
-							if (h1 > 0) {
-								pmatch->arinf[pmatch->arcnt].ar = h1;
-								pmatch->arinf[pmatch->arcnt].odd1 = bfodd1;
-								pmatch->arinf[pmatch->arcnt].odd2 = hfodd2;
-								pmatch->arinf[pmatch->arcnt].c1 = 'B';
-								pmatch->arinf[pmatch->arcnt++].c2 = 'H';
-								pmatch->arinf = (arbit_inf*)realloc(pmatch->arinf, (pmatch->arcnt + 1) * sizeof(arbit_inf));
-							}
-						}
-						else {
-							if (bhandi1 < hhandi2) {
-								v1 = bhandi1;
-								o1 = bfodd1;
-								v2 = hhandi2;
-								o2 = hfodd2;
-								pmatch->inf[8][pmatch->mcnt[8]].c1 = 'B';
-								pmatch->inf[8][pmatch->mcnt[8]].c2 = 'H';
-							}
-							else {
-								v1 = hhandi1;
-								o1 = hfodd1;
-								v2 = bhandi2;
-								o2 = bfodd2;
-								pmatch->inf[8][pmatch->mcnt[8]].c1 = 'H';
-								pmatch->inf[8][pmatch->mcnt[8]].c2 = 'B';
-							}
-							stake1 = 100; stake2 = stake1 * o1 / o2;
-							h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
-							pmatch->inf[8][pmatch->mcnt[8]].middle = h1;
-							pmatch->inf[8][pmatch->mcnt[8]].handi1 = v1;
-							pmatch->inf[8][pmatch->mcnt[8]].handi2 = v2;;
-							pmatch->inf[8][pmatch->mcnt[8]].odd1 = o1;
-							pmatch->inf[8][pmatch->mcnt[8]].nalt = 2;
-							pmatch->inf[8][pmatch->mcnt[8]++].odd2 = o2;
-							pmatch->inf[8] = (middle_inf*)realloc(pmatch->inf[8], (pmatch->mcnt[8] + 1) * sizeof(middle_inf));
 						}
 					}
 				}
@@ -2246,7 +2107,7 @@ void COppCheckDlg::ReadDataDisplay()
 	g_updated = 1;
 	int nend_time = GetTickCount();
 	memset(buff, 0, sizeof(wchar_t) * 200);
-	swprintf(buff, 200, L"%d seconds. %d matches found.", (nend_time - nstart_time) / 1000, g_matches.size());
+	swprintf(buff, 200, L"%d(%d) seconds. %d matches found.", (nend_time - nstart_time) / 1000, commtime / 1000, g_matches.size());
 	SetDlgItemText(IDC_STATIC_COUNT, buff);
 }
 int COppCheckDlg::GetBet365_Odd(int match_id) {
@@ -2279,8 +2140,26 @@ int COppCheckDlg::GetBet365_Odd(int match_id) {
 	CURLcode ret = curl_easy_perform(hnd);
 	curl_slist_free_all(headers);
 	curl_easy_cleanup(hnd);
+	return ret;
+}
+int COppCheckDlg::GetBet365_Odd1(int match_id) {
+	char buff[260] = { 0 };
+	sprintf(buff, "https://betsapi2.p.rapidapi.com/v3/bet365/prematch?FI=%d", match_id);
+	CURL *hnd = curl_easy_init();
 
+	curl_easy_setopt(hnd, CURLOPT_CUSTOMREQUEST, "GET");
+	curl_easy_setopt(hnd, CURLOPT_URL, buff);
 
+	struct curl_slist *headers = NULL;
+	curl_easy_setopt(hnd, CURLOPT_CAINFO, "cacert.pem");
+	headers = curl_slist_append(headers, "X-RapidAPI-Key: e2fa07ad89msh0857ce6a64b3678p13de20jsn4cdcdb04c8ff");
+	headers = curl_slist_append(headers, "X-RapidAPI-Host: betsapi2.p.rapidapi.com");
+	curl_easy_setopt(hnd, CURLOPT_WRITEFUNCTION, function_pt1);        // set a callback to capture the server's response
+	curl_easy_setopt(hnd, CURLOPT_HTTPHEADER, headers);
+
+	CURLcode ret = curl_easy_perform(hnd);
+	curl_slist_free_all(headers);
+	curl_easy_cleanup(hnd);
 	return ret;
 }
 void COppCheckDlg::getWStr(const char *timestamp, wchar_t *wstr) {
@@ -2326,6 +2205,35 @@ void COppCheckDlg::getWhere(int n, wchar_t *p) {
 		break;
 	}
 }
+int COppCheckDlg::check_filter(int idx) {
+	if (goal_filter) {
+		if (idx > 3)
+			return 0;
+	}
+	if (corner_filter) {
+		if (idx < 4 || idx > 6)
+			return 0;
+	}
+	if (book_filter) {
+		if (idx < 7)
+			return 0;
+	}
+	return 1;
+}
+int COppCheckDlg::can_display(match_inf *pm) {
+	int ncnt = pm->arcnt;
+	int j, k;
+	float middle;
+	for (j = 0; j < CHECK_PARAMS; j++) {
+		for (k = 0; k < pm->mcnt[j]; k++) {
+			middle = pm->inf[j][k].middle;
+			if (middle > g_nFilter) {
+				ncnt++;
+			}
+		}
+	}
+	return ncnt;
+}
 DWORD COppCheckDlg::display_func() {
 	int filelen1, ns;
 	FILE *fhga;
@@ -2333,13 +2241,18 @@ DWORD COppCheckDlg::display_func() {
 	wchar_t buff[260] = { 0 };
 	int i, idx, j, narb, k, nmid;
 	float middle;
-
+	string s1, s2, s3;
 	while (1)
 	{
 		while (1) {
 			if (g_updated == 1)
 				break;
 			Sleep(1000);
+		}
+		ns = g_matches.size();
+		if (ns == 0) {
+			Sleep(500);
+			continue;
 		}
 		m_org.SetRedraw(FALSE);
 		m_org.DeleteAllItems();
@@ -2358,18 +2271,27 @@ DWORD COppCheckDlg::display_func() {
 
 		Document d;
 		d.Parse(readBuffer1);
-		delete readBuffer1;
-
-		ns = g_matches.size();
+		delete readBuffer1;		
 		idx = 0;
 		
 		for (i = 0; i < ns; i++) {
 			match_inf *pm = g_matches.at(i);
+			if (can_display(pm) == 0)
+				continue;
 			string sdatetime = d[pm->hga_inx]["DATETIME"].GetString();
 			string sleague = d[pm->hga_inx]["LEAGUE"].GetString();
 			string steamh = d[pm->hga_inx]["TEAM_H"].GetString();
 			string steamc = d[pm->hga_inx]["TEAM_C"].GetString();
-
+			if (g_textFilter != "") {
+				s1 = steamh;
+				s2 = steamc;
+				s3 = g_textFilter;
+				for (auto & c : s1) c = toupper(c);
+				for (auto & c : s2) c = toupper(c);
+				for (auto & c : s3) c = toupper(c);
+				if (!(s1.find(s3) != string::npos || s2.find(s3) != string::npos))
+					continue;
+			}
 			TimeStamp2String(sdatetime.c_str(), buff);
 			m_org.InsertItem(idx, buff);
 
@@ -2384,7 +2306,12 @@ DWORD COppCheckDlg::display_func() {
 
 			memset(buff, 0, 260);
 			swprintf(buff, 260, L"%ld", (long int)(pm->pthis));
-			m_org.SetItemText(idx,10, buff);
+			m_org.SetItemText(idx,8, buff);
+
+			memset(buff, 0, 260);
+			swprintf(buff, 260, L"%d", pm->bid);
+			m_org.SetItemText(idx, 9, buff);
+
 
 			narb = 0; nmid = 0;
 			for (j = 0; j < pm->arcnt; j++) {
@@ -2392,24 +2319,29 @@ DWORD COppCheckDlg::display_func() {
 					m_org.InsertItem(idx + narb, L"");
 				}
 				memset(buff, 0, 260);
-				swprintf(buff, 260, L"%.3f", pm->arinf[j].ar);
+				if(pm->arinf[j].nwhere == 0 || pm->arinf[j].nwhere == 2 || pm->arinf[j].nwhere == 4|| pm->arinf[j].nwhere == 7)
+					swprintf(buff, 260, L"%.3f(%.2f)", pm->arinf[j].ar, pm->arinf[j].ov);
+				else
+					swprintf(buff, 260, L"%.3f(o/u%.2f)", pm->arinf[j].ar, pm->arinf[j].ov);
 				m_org.SetItemText(idx + narb, 4, buff);
 
 				memset(buff, 0, 260);
-				getWhere(j, buff);
+				getWhere(pm->arinf[j].nwhere, buff);
 				m_org.SetItemText(idx + narb, 5, buff);
 
 				memset(buff, 0, 260);
-				swprintf(buff, 260, L"%.3f", pm->arinf[j].odd1);
+				swprintf(buff, 260, L"%.3f(%c)", pm->arinf[j].odd1, pm->arinf[j].c1);
 				m_org.SetItemText(idx + narb, 6, buff);
 
 				memset(buff, 0, 260);
-				swprintf(buff, 260, L"%.3f", pm->arinf[j].odd2);
+				swprintf(buff, 260, L"%.3f(%c)", pm->arinf[j].odd2, pm->arinf[j].c2);
 				m_org.SetItemText(idx + narb, 7, buff);
 				narb++;
 				
 			}
 			for (j = 0; j < CHECK_PARAMS; j++) {
+				if (check_filter(j) == 0)
+					continue;
 				for (k = 0; k < pm->mcnt[j]; k++) {
 					middle = pm->inf[j][k].middle;
 					if (middle > g_nFilter) {
@@ -2428,8 +2360,6 @@ DWORD COppCheckDlg::display_func() {
 							m_org.SetItemText(idx + narb, 5, L"Where");
 							m_org.SetItemText(idx + narb, 6, L"Odd1");
 							m_org.SetItemText(idx + narb, 7, L"Odd2");
-							m_org.SetItemText(idx + narb, 8, L"");
-							m_org.SetItemText(idx + narb, 9, L"");
 
 							nmid++;
 						}
@@ -2462,20 +2392,12 @@ DWORD COppCheckDlg::display_func() {
 						m_org.SetItemText(idx + narb + nmid, 5, buff);
 
 						memset(buff, 0, 260);
-						swprintf(buff, 260, L"%.3f", pm->inf[j][k].odd1);
+						swprintf(buff, 260, L"%.3f(%c)", pm->inf[j][k].odd1, pm->inf[j][k].c1);
 						m_org.SetItemText(idx + narb + nmid, 6, buff);
 
 						memset(buff, 0, 260);
-						swprintf(buff, 260, L"%.3f", pm->inf[j][k].odd2);
+						swprintf(buff, 260, L"%.3f(%c)", pm->inf[j][k].odd2, pm->inf[j][k].c2);
 						m_org.SetItemText(idx + narb + nmid, 7, buff);
-
-						memset(buff, 0, 260);
-						swprintf(buff, 260, L"%c", pm->inf[j][k].c1);
-						m_org.SetItemText(idx + narb + nmid, 8, buff);
-
-						memset(buff, 0, 260);
-						swprintf(buff, 260, L"%c", pm->inf[j][k].c2);
-						m_org.SetItemText(idx + narb + nmid, 9, buff);
 
 						nmid++;
 					}
@@ -2495,6 +2417,8 @@ DWORD COppCheckDlg::display_func() {
 		}
 		g_updated = 0;
 		SetWindowText(L"Done.");
+		
+		m_status = 4;
 	}
 	return 0;
 }
@@ -2505,29 +2429,53 @@ DWORD COppCheckDlg::display_thread(LPVOID param) {
 	return pDlg->display_func();
 }
 DWORD COppCheckDlg::catch_func() {
-	while (1) {
+	m_status = 0;
+	gs_strLastResponse = "";
+	SetWindowText(L"Downloading HGA038's data. please wait...");
+	GetHGA();
+	m_status = 1;
+	SetWindowText(L"Downloading Bet365's upcoming data. please wait...");
+	GetBet365_Upcoming();
+	m_status = 2;
+	SetWindowText(L"Downloading Bet365's odd data and calculating. please wait...");
+	ReadDataDisplay();//HGA centraltime zone, GMT time zone.
+	SetWindowText(L"Almost done. please wait...");
+	m_status = 3;
+	m_autochk.EnableWindow(TRUE);
+	m_btn_refresh.EnableWindow(TRUE);
+	return 0;
+}
+DWORD COppCheckDlg::catch_func_auto_func() {
+	while (m_autorefresh) {
+		m_autochk.EnableWindow(FALSE);
 		m_status = 0;
 		gs_strLastResponse = "";
 		SetWindowText(L"Downloading HGA038's data. please wait...");
-//		GetHGA();
+		GetHGA();
 		m_status = 1;
 		SetWindowText(L"Downloading Bet365's upcoming data. please wait...");
 		GetBet365_Upcoming();
 		m_status = 2;
 		SetWindowText(L"Downloading Bet365's odd data and calculating. please wait...");
 		ReadDataDisplay();//HGA centraltime zone, GMT time zone.
-
 		SetWindowText(L"Almost done. please wait...");
 		m_status = 3;
-
-		Sleep(300 * 1000); //Read Every 5 min
+		m_autochk.EnableWindow(TRUE);
+		Sleep(600 * 1000);
 	}
+	return 0;
 }
 DWORD COppCheckDlg::catch_thread(LPVOID param) {
 	COppCheckDlg *pDlg = (COppCheckDlg*)param;
 	if (pDlg == NULL)
 		return 0;
 	return pDlg->catch_func();
+}
+DWORD COppCheckDlg::catch_func_auto(LPVOID param) {
+	COppCheckDlg *pDlg = (COppCheckDlg*)param;
+	if (pDlg == NULL)
+		return 0;
+	return pDlg->catch_func_auto_func();
 }
 void COppCheckDlg::TimeStamp2String(const char *timestamp, wchar_t *strtime) {
 	time_t tmer = atoi(timestamp);
@@ -2537,21 +2485,1071 @@ void COppCheckDlg::TimeStamp2String(const char *timestamp, wchar_t *strtime) {
 }
 void COppCheckDlg::OnBnClickedButton1()
 {
+
 	CString txt;
+	int n = m_seltype.GetCurSel();
 	GetDlgItemText(IDC_EDIT_FILTER, txt);
-	if (txt.GetLength() == 0) {
+	if (txt.GetLength() == 0 && n == 1) {
 		MessageBox(L"Please input filter value");
 		return;
 	}
-	g_nFilter = GetDlgItemInt(IDC_EDIT_FILTER);
-
+	
+	if (n == 1) {
+		g_nFilter = GetDlgItemInt(IDC_EDIT_FILTER);
+	}
+	else {
+		char buff[260] = { 0 };
+		WideCharToMultiByte(CP_ACP, 0, txt.GetBuffer(0), txt.GetLength(), buff, 260, 0, 0);
+		g_textFilter = buff;
+	}
 	g_updated = 1;
 }
+void COppCheckDlg::load_single_match_hga_365() {
+	int nsize,j, nalt, k, bid = 0;
+	char *p;
+	FILE *fp = fopen("hga/match.json", "rb");
+	if (fp == NULL)
+		return;
+	fseek(fp, 0, SEEK_END);
+	nsize = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
 
+	p = new char[nsize + 1];
+	memset(p, 0, nsize + 1);
+	fread(p, 1, nsize, fp);
+	fclose(fp);
+
+	Document d;
+ 	d.Parse(p);
+
+	delete p;
+
+	
+	//bid = 127948843;
+	if (pinterested_match != NULL) {
+		bid = pinterested_match->bid;
+	}
+	else {
+		if (new_int_match != NULL)
+			bid = new_int_match->bid;
+	}
+	if (bid == 0)
+		return;
+	
+	string sstrong, shandicap, shodd, scodd, sgoalo, sgoalu, sgoaloodd, sgoaluodd;
+	int handi_alt = d["handicap_count"].GetInt();
+	int half_alt = d["1sthalf_count"].GetInt();
+	if (handi_alt == 0 || half_alt == 0)
+		return;
+
+	if (new_int_match != NULL) {
+		delete new_int_match->arinf;
+		for (j = 0; j < CHECK_PARAMS; j++)
+			delete new_int_match->inf[j];
+		delete new_int_match;
+		new_int_match = NULL;
+	}
+	new_int_match = new match_inf;
+	memset(new_int_match, 0, sizeof(match_inf));
+	new_int_match->arcnt = 0;
+	new_int_match->pthis = new_int_match;
+	new_int_match->bid = bid;
+	new_int_match->arinf = new arbit_inf;
+	for (j = 0;j < CHECK_PARAMS; j++)
+		new_int_match->inf[j] = new middle_inf;
+
+	Document odds;
+	float h1, stake1, stake2;
+	gs_betresponse = "";
+	int ndiff = GetBet365_Odd1(bid);
+	if (ndiff == CURLE_OK) {
+#ifdef TEST_MODE
+		FILE *fp = fopen("betref.json", "wb");
+		fwrite(gs_betresponse.c_str(), 1, gs_betresponse.length(), fp);
+		fclose(fp);
+#endif
+		odds.Parse(gs_betresponse.c_str());
+		if (odds.HasMember("results") && odds["results"][0].HasMember("asian_lines")) {
+			const Value& sp = odds["results"][0]["asian_lines"]["sp"];
+
+			////////////////////////////////////////////////////////////////////////////////////////////////
+			// start check for asian handicap
+			////////////////////////////////////////////////////////////////////////////////////////////////
+			string bodd1, bodd2, bhandicap1, bhandicap2;
+			float bhandi1, bhandi2, hhandi1, hhandi2, bfodd1, bfodd2, hfodd1, hfodd2;
+
+			float h_handis1[10] = { 0 };
+			float h_handis2[10] = { 0 };
+			float h_odds1[10] = { 0 };
+			float h_odds2[10] = { 0 };
+			float b_handis1[20] = { 0 };
+			float b_handis2[20] = { 0 };
+			float b_odds1[20] = { 0 };
+			float b_odds2[20] = { 0 };
+
+			char alt_buf[20] = { 0 };
+			int idx1, idx2;
+			float v1, v2, o1, o2;
+
+			if (sp.HasMember("asian_handicap")) {
+				bodd1 = sp["asian_handicap"]["odds"][0]["odds"].GetString();
+				bodd2 = sp["asian_handicap"]["odds"][1]["odds"].GetString();
+				bhandicap1 = sp["asian_handicap"]["odds"][0]["handicap"].GetString();
+				bhandicap2 = sp["asian_handicap"]["odds"][1]["handicap"].GetString();
+				bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+				bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+				bfodd1 = atof(bodd1.c_str());
+				bfodd2 = atof(bodd2.c_str());
+				b_handis1[0] = bhandi1;
+				b_handis2[0] = bhandi2;
+				b_odds1[0] = bfodd1;
+				b_odds2[0] = bfodd2;
+
+				for (j = 0;j < handi_alt; j++) {
+					sprintf(alt_buf, "handicap_%d", j + 1);
+					const Value &altline = d[alt_buf];
+					sstrong = altline["STRONG"].GetString();
+					shandicap = altline["RATIO_R"].IsNull() ? "null" : altline["RATIO_R"].GetString();
+					shodd = altline["ior_RH"].IsNull() ? "null" : altline["ior_RH"].GetString();
+					scodd = altline["ior_RC"].IsNull() ? "null" : altline["ior_RC"].GetString();
+					hfodd1 = atof(shodd.c_str());
+					hfodd2 = atof(scodd.c_str());
+					hhandi1 = get_handicap_from_string(shandicap.c_str(), '/');
+					hhandi2 = -hhandi1;
+					if (sstrong == "H") {
+						hhandi1 = hhandi2;
+						hhandi2 = -hhandi2;
+					}
+					h_handis1[j] = hhandi1;
+					h_handis2[j] = hhandi2;
+					h_odds1[j] = hfodd1;
+					h_odds2[j] = hfodd2;
+				}
+				if (sp.HasMember("alternative_asian_handicap") && odds["results"][0].HasMember("others")) {
+					const Value &others = odds["results"][0]["others"];
+					ndiff = others.Size();
+					for (j = 0; j < ndiff; j++) {
+						if (others[j]["sp"].HasMember("alternative_asian_handicap")) {
+							const Value& aoddes = others[j]["sp"]["alternative_asian_handicap"]["odds"];
+							nalt = aoddes.Size();
+							idx1 = 1; idx2 = 1;
+							for (k = 0; k < nalt; k++) {
+								string saodd = aoddes[k]["odds"].GetString();
+								float aodd = atof(saodd.c_str());
+								string aheader = aoddes[k]["header"].GetString();
+								int ah = atoi(aheader.c_str());
+								string ahandicap = aoddes[k]["handicap"].GetString();
+								float ahandi = get_handicap_from_string(ahandicap.c_str());
+								if (ah == 1) {
+									b_handis1[idx1] = ahandi;
+									b_odds1[idx1] = aodd;
+									idx1++;
+								}
+								else if (ah == 2) {
+									b_handis2[idx2] = ahandi;
+									b_odds2[idx2] = aodd;
+									idx2++;
+								}
+							}
+							break;
+						}
+					}
+				}
+				Asian_Handicap(new_int_match, b_handis1, b_handis2, h_handis1, h_handis2, b_odds1, b_odds2, h_odds1, h_odds2, 0);
+			}
+			///////////////////////////////////////////////////////////////////////////////////////////////
+			// Check For goal lines
+			///////////////////////////////////////////////////////////////////////////////////////////////
+			if (sp.HasMember("goal_line")) {
+				memset(h_handis1, 0, 4 * sizeof(float));
+				memset(h_handis2, 0, 4 * sizeof(float));
+				memset(h_odds1, 0, 4 * sizeof(float));
+				memset(h_odds2, 0, 4 * sizeof(float));
+				memset(b_handis1, 0, 20 * sizeof(float));
+				memset(b_handis2, 0, 20 * sizeof(float));
+				memset(b_odds1, 0, 20 * sizeof(float));
+				memset(b_odds2, 0, 20 * sizeof(float));
+
+				bodd1 = sp["goal_line"]["odds"][0]["odds"].GetString();
+				bodd2 = sp["goal_line"]["odds"][1]["odds"].GetString();
+				bhandicap1 = sp["goal_line"]["odds"][0]["name"].GetString();
+				bhandicap2 = sp["goal_line"]["odds"][1]["name"].GetString();
+				bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+				bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+				bfodd1 = atof(bodd1.c_str());
+				bfodd2 = atof(bodd2.c_str());
+
+				b_handis1[0] = bhandi1;
+				b_handis2[0] = bhandi2;
+				b_odds1[0] = bfodd1;
+				b_odds2[0] = bfodd2;
+
+				memset(alt_buf, 0, 20);
+				for (j = 0;j < handi_alt; j++) {
+					sprintf(alt_buf, "handicap_%d", j + 1);
+					const Value &altline = d[alt_buf];
+
+					sgoalo = altline["RATIO_OUO"].IsNull() ? "null" : altline["RATIO_OUO"].GetString();
+					sgoalu = altline["RATIO_OUU"].IsNull() ? "null" : altline["RATIO_OUU"].GetString();
+					sgoaloodd = altline["ior_OUH"].IsNull() ? "null" : altline["ior_OUH"].GetString();
+					sgoaluodd = altline["ior_OUC"].IsNull() ? "null" : altline["ior_OUC"].GetString();
+
+					hfodd1 = atof(sgoaloodd.c_str());
+					hfodd2 = atof(sgoaluodd.c_str());
+					sgoalo = ReplaceAll(sgoalo, "O", "");
+					sgoalu = ReplaceAll(sgoalu, "U", "");
+					hhandi1 = get_handicap_from_string(sgoalo.c_str(), '/');
+					hhandi2 = get_handicap_from_string(sgoalu.c_str(), '/');
+
+					h_handis1[j] = hhandi1;
+					h_handis2[j] = hhandi2;
+					h_odds1[j] = hfodd1;
+					h_odds2[j] = hfodd2;
+				}
+				if (sp.HasMember("alternative_goal_line") && odds["results"][0].HasMember("others")) {
+					const Value &others = odds["results"][0]["others"];
+					ndiff = others.Size();
+					for (j = 0; j < ndiff; j++) {
+						if (others[j]["sp"].HasMember("alternative_goal_line")) {
+							const Value& aoddes = others[j]["sp"]["alternative_goal_line"]["odds"];
+							nalt = aoddes.Size();
+							idx1 = 1; idx2 = 1;
+							for (k = 0; k < nalt; k++) {
+								string saodd = aoddes[k]["odds"].GetString();
+								float aodd = atof(saodd.c_str());
+								string aheader = aoddes[k]["header"].GetString();
+								string ahandicap = aoddes[k]["name"].GetString();
+								float ahandi = get_handicap_from_string(ahandicap.c_str());
+								if (aheader == "Over") {
+									b_handis1[idx1] = ahandi;
+									b_odds1[idx1] = aodd;
+									idx1++;
+								}
+								else {
+									b_handis2[idx2] = ahandi;
+									b_odds2[idx2] = aodd;
+									idx2++;
+								}
+							}
+							break;
+						}
+					}
+				}
+				Asian_GoalLine(new_int_match, b_handis1, b_handis2, h_handis1, h_handis2, b_odds1, b_odds2, h_odds1, h_odds2, 1);
+			}
+			//////////////////////////////////////////////////////////////////////////////////////////////////////////
+			// 1st asian handicap
+			//////////////////////////////////////////////////////////////////////////////////////////////////////////
+			if (sp.HasMember("1st_half_asian_handicap")) {
+				memset(h_handis1, 0, 4 * sizeof(float));
+				memset(h_handis2, 0, 4 * sizeof(float));
+				memset(h_odds1, 0, 4 * sizeof(float));
+				memset(h_odds2, 0, 4 * sizeof(float));
+				memset(b_handis1, 0, 20 * sizeof(float));
+				memset(b_handis2, 0, 20 * sizeof(float));
+				memset(b_odds1, 0, 20 * sizeof(float));
+				memset(b_odds2, 0, 20 * sizeof(float));
+				bodd1 = sp["1st_half_asian_handicap"]["odds"][0]["odds"].GetString();
+				bodd2 = sp["1st_half_asian_handicap"]["odds"][1]["odds"].GetString();
+				bhandicap1 = sp["1st_half_asian_handicap"]["odds"][0]["handicap"].GetString();
+				bhandicap2 = sp["1st_half_asian_handicap"]["odds"][1]["handicap"].GetString();
+				bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+				bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+				bfodd1 = atof(bodd1.c_str());
+				bfodd2 = atof(bodd2.c_str());
+
+				b_handis1[0] = bhandi1;
+				b_handis2[0] = bhandi2;
+				b_odds1[0] = bfodd1;
+				b_odds2[0] = bfodd2;
+				memset(alt_buf, 0, 20);
+				for (j = 0;j < half_alt; j++) {
+					sprintf(alt_buf, "1sthalf_%d", j + 1);
+					const Value &altline = d[alt_buf];
+					sstrong = altline["STRONG"].GetString();
+					shandicap = altline["RATIO_HR"].IsNull() ? "null" : altline["RATIO_HR"].GetString();
+					shodd = altline["ior_HRH"].IsNull() ? "null" : altline["ior_HRH"].GetString();
+					scodd = altline["ior_HRC"].IsNull() ? "null" : altline["ior_HRC"].GetString();
+					hfodd1 = atof(shodd.c_str());
+					hfodd2 = atof(scodd.c_str());
+					hhandi1 = get_handicap_from_string(shandicap.c_str(), '/');
+					hhandi2 = -hhandi1;
+					if (sstrong == "H") {
+						hhandi1 = hhandi2;
+						hhandi2 = -hhandi2;
+					}
+					h_handis1[j] = hhandi1;
+					h_handis2[j] = hhandi2;
+					h_odds1[j] = hfodd1;
+					h_odds2[j] = hfodd2;
+				}
+				//User alternative lines to calc middling.
+				if (sp.HasMember("alternative_1st_half_asian_handicap") && odds["results"][0].HasMember("others")) {
+					const Value &others = odds["results"][0]["others"];
+					ndiff = others.Size();
+					for (j = 0; j < ndiff; j++) {
+						if (others[j]["sp"].HasMember("alternative_1st_half_asian_handicap")) {
+							const Value& aoddes = others[j]["sp"]["alternative_1st_half_asian_handicap"]["odds"];
+							nalt = aoddes.Size();
+							idx1 = 1; idx2 = 1;
+							for (k = 0; k < nalt; k++) {
+								string saodd = aoddes[k]["odds"].GetString();
+								float aodd = atof(saodd.c_str());
+								string aheader = aoddes[k]["header"].GetString();
+								int ah = atoi(aheader.c_str());
+								string ahandicap = aoddes[k]["handicap"].GetString();
+								float ahandi = get_handicap_from_string(ahandicap.c_str());
+								if (ah == 1) {
+									b_handis1[idx1] = ahandi;
+									b_odds1[idx1] = aodd;
+									idx1++;
+								}
+								else if (ah == 2) {
+									b_handis2[idx2] = ahandi;
+									b_odds2[idx2] = aodd;
+									idx2++;
+								}
+							}
+							break;
+						}
+					}
+				}
+				Asian_Handicap(new_int_match, b_handis1, b_handis2, h_handis1, h_handis2, b_odds1, b_odds2, h_odds1, h_odds2, 2);
+			}
+			//////////////////////////////////////////////////////////////////////////////////
+			//	1st asian goal line
+			/////////////////////////////////////////////////////////////////////////////////
+			if (sp.HasMember("1st_half_goal_line")) {
+				memset(h_handis1, 0, 4 * sizeof(float));
+				memset(h_handis2, 0, 4 * sizeof(float));
+				memset(h_odds1, 0, 4 * sizeof(float));
+				memset(h_odds2, 0, 4 * sizeof(float));
+				memset(b_handis1, 0, 20 * sizeof(float));
+				memset(b_handis2, 0, 20 * sizeof(float));
+				memset(b_odds1, 0, 20 * sizeof(float));
+				memset(b_odds2, 0, 20 * sizeof(float));
+
+				bodd1 = sp["1st_half_goal_line"]["odds"][0]["odds"].GetString();
+				bodd2 = sp["1st_half_goal_line"]["odds"][1]["odds"].GetString();
+				bhandicap1 = sp["1st_half_goal_line"]["odds"][0]["name"].GetString();
+				bhandicap2 = sp["1st_half_goal_line"]["odds"][1]["name"].GetString();
+				bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+				bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+
+				bfodd1 = atof(bodd1.c_str());
+				bfodd2 = atof(bodd2.c_str());
+
+				b_handis1[0] = bhandi1;
+				b_handis2[0] = bhandi2;
+				b_odds1[0] = bfodd1;
+				b_odds2[0] = bfodd2;
+
+				memset(alt_buf, 0, 20);
+
+				for (j = 0;j < half_alt; j++) {
+					sprintf(alt_buf, "1sthalf_%d", j + 1);
+					const Value &altline = d[alt_buf];
+
+					sgoalo = altline["RATIO_HOUO"].IsNull() ? "null" : altline["RATIO_HOUO"].GetString();
+					sgoalu = altline["RATIO_HOUU"].IsNull() ? "null" : altline["RATIO_HOUU"].GetString();
+					sgoaloodd = altline["ior_HOUH"].IsNull() ? "null" : altline["ior_HOUH"].GetString();
+					sgoaluodd = altline["ior_HOUC"].IsNull() ? "null" : altline["ior_HOUC"].GetString();
+
+					hfodd1 = atof(sgoaloodd.c_str());
+					hfodd2 = atof(sgoaluodd.c_str());
+					sgoalo = ReplaceAll(sgoalo, "O", "");
+					sgoalu = ReplaceAll(sgoalu, "U", "");
+					hhandi1 = get_handicap_from_string(sgoalo.c_str(), '/');
+					hhandi2 = get_handicap_from_string(sgoalu.c_str(), '/');
+					
+					h_handis1[j] = hhandi1;
+					h_handis2[j] = hhandi2;
+					h_odds1[j] = hfodd1;
+					h_odds2[j] = hfodd2;
+				}
+
+				if (sp.HasMember("alternative_1st_half_goal_line") && odds["results"][0].HasMember("others")) {
+					const Value &others = odds["results"][0]["others"];
+					ndiff = others.Size();
+					for (j = 0; j < ndiff; j++) {
+						if (others[j]["sp"].HasMember("alternative_1st_half_goal_line")) {
+							const Value& aoddes = others[j]["sp"]["alternative_1st_half_goal_line"]["odds"];
+							nalt = aoddes.Size();
+							idx1 = 1;idx2 = 2;
+							for (k = 0; k < nalt; k++) {
+								string saodd = aoddes[k]["odds"].GetString();
+								float aodd = atof(saodd.c_str());
+								string aheader = aoddes[k]["header"].GetString();
+								string ahandicap = aoddes[k]["name"].GetString();
+								float ahandi = get_handicap_from_string(ahandicap.c_str());
+								if (aheader == "Over") {
+									b_handis1[idx1] = ahandi;
+									b_odds1[idx1] = aodd;
+									idx1++;
+								}
+								else {
+									b_handis2[idx2] = ahandi;
+									b_odds2[idx2] = aodd;
+									idx2++;
+								}
+							}
+							break;
+						}
+					}
+				}
+
+				Asian_GoalLine(new_int_match, b_handis1, b_handis2, h_handis1, h_handis2, b_odds1, b_odds2, h_odds1, h_odds2, 3);
+			}
+			//////////////////////////////////////////////////////////////////////////////////
+			// asian_handicap_corners
+			//////////////////////////////////////////////////////////////////////////////////
+
+			if (d.HasMember("CN_DATA")) {
+				const Value& cn_data = d["CN_DATA"];
+				sstrong = cn_data["STRONG"].IsNull() ? "null" : cn_data["STRONG"].GetString();
+				shandicap = cn_data["RATIO_R"].IsNull() ? "null" : cn_data["RATIO_R"].GetString();
+				if (shandicap != "null") {
+					shodd = cn_data["ior_RH"].IsNull() ? "null" : cn_data["ior_RH"].GetString();
+					scodd = cn_data["ior_RC"].IsNull() ? "null" : cn_data["ior_RC"].GetString();
+					sgoalo = cn_data["RATIO_OUO"].IsNull() ? "null" : cn_data["RATIO_OUO"].GetString();
+					sgoalu = cn_data["RATIO_OUU"].IsNull() ? "null" : cn_data["RATIO_OUU"].GetString();
+					sgoaloodd = cn_data["ior_OUH"].IsNull() ? "null" : cn_data["ior_OUH"].GetString();
+					sgoaluodd = cn_data["ior_OUC"].IsNull() ? "null" : cn_data["ior_OUC"].GetString();
+					if (sp.HasMember("asian_handicap_corners")) {
+						bodd1 = sp["asian_handicap_corners"]["odds"][0]["odds"].GetString();
+						bodd2 = sp["asian_handicap_corners"]["odds"][1]["odds"].GetString();
+						bhandicap1 = sp["asian_handicap_corners"]["odds"][0]["handicap"].GetString();
+						bhandicap2 = sp["asian_handicap_corners"]["odds"][1]["handicap"].GetString();
+						bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+						bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+
+						hhandi1 = get_handicap_from_string(shandicap.c_str(), '/');
+						hhandi2 = -hhandi1;
+
+						bfodd1 = atof(bodd1.c_str());
+						bfodd2 = atof(bodd2.c_str());
+						hfodd1 = atof(shodd.c_str());
+						hfodd2 = atof(scodd.c_str());
+						if (sstrong == "H") {
+							hhandi1 = hhandi2;
+							hhandi2 = -hhandi2;
+						}
+						if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
+							h1 = checkArbitrage(hfodd1, bfodd2);
+							if (h1 <= MIN_ARBIT) {
+								new_int_match->arinf[new_int_match->arcnt].ar = h1;
+								new_int_match->arinf[new_int_match->arcnt].ov = fabs(hhandi1);
+								new_int_match->arinf[new_int_match->arcnt].odd1 = hfodd1;
+								new_int_match->arinf[new_int_match->arcnt].odd2 = bfodd2;
+								new_int_match->arinf[new_int_match->arcnt].nwhere = 4;
+								new_int_match->arinf[new_int_match->arcnt].c1 = 'H';
+								new_int_match->arinf[new_int_match->arcnt++].c2 = 'B';
+							
+								new_int_match->arinf = (arbit_inf*)realloc(new_int_match->arinf, (new_int_match->arcnt + 1) * sizeof(arbit_inf));
+							}
+						}
+						if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
+							h1 = checkArbitrage(bfodd1, hfodd2);
+							if (h1 <= MIN_ARBIT) {
+								new_int_match->arinf[new_int_match->arcnt].ar = h1;
+								new_int_match->arinf[new_int_match->arcnt].ov = fabs(bhandi1);
+								new_int_match->arinf[new_int_match->arcnt].odd1 = bfodd1;
+								new_int_match->arinf[new_int_match->arcnt].odd2 = hfodd2;
+								new_int_match->arinf[new_int_match->arcnt].nwhere = 4;
+								new_int_match->arinf[new_int_match->arcnt].c1 = 'B';
+								new_int_match->arinf[new_int_match->arcnt++].c2 = 'H';
+								
+								new_int_match->arinf = (arbit_inf*)realloc(new_int_match->arinf, (new_int_match->arcnt + 1) * sizeof(arbit_inf));
+							}
+						}
+						if (!(fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001 || fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001)) {
+							if (fabs(bhandi1) - fabs(hhandi1) < 0) {
+								//This means hga offer high value.
+								if (hhandi1 > 0) {
+									v1 = hhandi1;
+									o1 = hfodd1;
+									v2 = bhandi2;
+									o2 = bfodd2;
+									new_int_match->inf[4][new_int_match->mcnt[4]].c1 = 'H';
+									new_int_match->inf[4][new_int_match->mcnt[4]].c2 = 'B';
+								}
+								else {
+									v1 = hhandi2;
+									o1 = hfodd2;
+									v2 = bhandi1;
+									o2 = bfodd1;
+									new_int_match->inf[4][new_int_match->mcnt[4]].c1 = 'H';
+									new_int_match->inf[4][new_int_match->mcnt[4]].c2 = 'B';
+								}
+							}
+							else {
+								if (bhandi1 > 0) {
+									v1 = bhandi1;
+									o1 = bfodd1;
+									v2 = hhandi2;
+									o2 = hfodd2;
+									new_int_match->inf[4][new_int_match->mcnt[4]].c1 = 'B';
+									new_int_match->inf[4][new_int_match->mcnt[4]].c2 = 'H';
+								}
+								else {
+									v1 = bhandi2;
+									o1 = bfodd2;
+									v2 = hhandi1;
+									o2 = hfodd1;
+									new_int_match->inf[4][new_int_match->mcnt[4]].c1 = 'B';
+									new_int_match->inf[4][new_int_match->mcnt[4]].c2 = 'H';
+								}
+							}
+							stake1 = 100; stake2 = stake1 * o1 / o2;
+							h1 = calc_middle(stake1, stake2, o1, o2, v1, v2);
+							new_int_match->inf[4][new_int_match->mcnt[4]].middle = h1;
+							new_int_match->inf[4][new_int_match->mcnt[4]].handi1 = v1;
+							new_int_match->inf[4][new_int_match->mcnt[4]].handi2 = v2;;
+							new_int_match->inf[4][new_int_match->mcnt[4]].odd1 = o1;
+							new_int_match->inf[4][new_int_match->mcnt[4]++].odd2 = o2;
+							new_int_match->inf[4] = (middle_inf*)realloc(new_int_match->inf[4], (new_int_match->mcnt[4] + 1) * sizeof(middle_inf));
+						}
+
+					}
+					/////////////////////////////////////////////////////////////
+					// asian_total_corners
+					/////////////////////////////////////////////////////////////
+					if (sp.HasMember("asian_total_corners")) {
+						bodd1 = sp["asian_total_corners"]["odds"][0]["odds"].GetString();
+						bodd2 = sp["asian_total_corners"]["odds"][1]["odds"].GetString();
+						bhandicap1 = sp["asian_total_corners"]["odds"][0]["name"].GetString();
+						bhandicap2 = sp["asian_total_corners"]["odds"][1]["name"].GetString();
+						bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+						bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+
+						bfodd1 = atof(bodd1.c_str());
+						bfodd2 = atof(bodd2.c_str());
+						hfodd1 = atof(sgoaloodd.c_str());
+						hfodd2 = atof(sgoaluodd.c_str());
+						sgoalo = ReplaceAll(sgoalo, "O", "");
+						sgoalu = ReplaceAll(sgoalu, "U", "");
+						hhandi1 = get_handicap_from_string(sgoalo.c_str(), '/');
+						hhandi2 = get_handicap_from_string(sgoalu.c_str(), '/');
+
+						if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
+							h1 = checkArbitrage(hfodd1, bfodd2);
+							if (h1 <= MIN_ARBIT) {
+								new_int_match->arinf[new_int_match->arcnt].ar = h1;
+								new_int_match->arinf[new_int_match->arcnt].ov = fabs(hhandi1);
+								new_int_match->arinf[new_int_match->arcnt].odd1 = hfodd1;
+								new_int_match->arinf[new_int_match->arcnt].odd2 = bfodd2;
+								new_int_match->arinf[new_int_match->arcnt].nwhere = 5;
+								new_int_match->arinf[new_int_match->arcnt].c1 = 'H';
+								new_int_match->arinf[new_int_match->arcnt++].c2 = 'B';
+								new_int_match->arinf = (arbit_inf*)realloc(new_int_match->arinf, (new_int_match->arcnt + 1) * sizeof(arbit_inf));
+							}
+						}
+						if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
+							h1 = checkArbitrage(bfodd1, hfodd2);
+							if (h1 <= MIN_ARBIT) {
+								new_int_match->arinf[new_int_match->arcnt].ar = h1;
+								new_int_match->arinf[new_int_match->arcnt].ov = fabs(bhandi1);
+								new_int_match->arinf[new_int_match->arcnt].odd1 = bfodd1;
+								new_int_match->arinf[new_int_match->arcnt].odd2 = hfodd2;
+								new_int_match->arinf[new_int_match->arcnt].nwhere = 5;
+								new_int_match->arinf[new_int_match->arcnt].c1 = 'B';
+								new_int_match->arinf[new_int_match->arcnt++].c2 = 'H';
+								new_int_match->arinf = (arbit_inf*)realloc(new_int_match->arinf, (new_int_match->arcnt + 1) * sizeof(arbit_inf));
+							}
+						}
+						if (!(fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001 || fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001)) {
+							if (bhandi1 < hhandi2) {
+								v1 = bhandi1;
+								o1 = bfodd1;
+								v2 = hhandi2;
+								o2 = hfodd2;
+								new_int_match->inf[5][new_int_match->mcnt[5]].c1 = 'B';
+								new_int_match->inf[5][new_int_match->mcnt[5]].c2 = 'H';
+							}
+							else {
+								v1 = hhandi1;
+								o1 = hfodd1;
+								v2 = bhandi2;
+								o2 = bfodd2;
+								new_int_match->inf[5][new_int_match->mcnt[5]].c1 = 'H';
+								new_int_match->inf[5][new_int_match->mcnt[5]].c2 = 'B';
+							}
+							stake1 = 100; stake2 = stake1 * o1 / o2;
+							h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+
+							new_int_match->inf[5][new_int_match->mcnt[5]].middle = h1;
+							new_int_match->inf[5][new_int_match->mcnt[5]].handi1 = v1;
+							new_int_match->inf[5][new_int_match->mcnt[5]].handi2 = v2;;
+							new_int_match->inf[5][new_int_match->mcnt[5]].odd1 = o1;
+							new_int_match->inf[5][new_int_match->mcnt[5]].nalt = 2;
+							new_int_match->inf[5][new_int_match->mcnt[5]++].odd2 = o2;
+							new_int_match->inf[5] = (middle_inf*)realloc(new_int_match->inf[5], (new_int_match->mcnt[5] + 1) * sizeof(middle_inf));
+						}
+					}
+					////////////////////////////////////////////////////////////////
+					// 1st_half_asian_corners
+					///////////////////////////////////////////////////////////////
+					if (sp.HasMember("asian_total_corners")) {
+						sgoalo = cn_data["RATIO_HOUO"].IsNull() ? "null" : cn_data["RATIO_HOUO"].GetString();
+						sgoalu = cn_data["RATIO_HOUU"].IsNull() ? "null" : cn_data["RATIO_HOUU"].GetString();
+						sgoaloodd = cn_data["ior_HOUH"].IsNull() ? "null" : cn_data["ior_HOUH"].GetString();
+						sgoaluodd = cn_data["ior_HOUC"].IsNull() ? "null" : cn_data["ior_HOUC"].GetString();
+
+						bodd1 = sp["1st_half_asian_corners"]["odds"][0]["odds"].GetString();
+						bodd2 = sp["1st_half_asian_corners"]["odds"][1]["odds"].GetString();
+						bhandicap1 = sp["1st_half_asian_corners"]["odds"][0]["name"].GetString();
+						bhandicap2 = sp["1st_half_asian_corners"]["odds"][1]["name"].GetString();
+						bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+						bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+
+						bfodd1 = atof(bodd1.c_str());
+						bfodd2 = atof(bodd2.c_str());
+						hfodd1 = atof(sgoaloodd.c_str());
+						hfodd2 = atof(sgoaluodd.c_str());
+						sgoalo = ReplaceAll(sgoalo, "O", "");
+						sgoalu = ReplaceAll(sgoalu, "U", "");
+						hhandi1 = get_handicap_from_string(sgoalo.c_str(), '/');
+						hhandi2 = get_handicap_from_string(sgoalu.c_str(), '/');
+						if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
+							h1 = checkArbitrage(hfodd1, bfodd2);
+							if (h1 <= MIN_ARBIT) {
+								new_int_match->arinf[new_int_match->arcnt].ar = h1;
+								new_int_match->arinf[new_int_match->arcnt].ov = fabs(hhandi1);
+								new_int_match->arinf[new_int_match->arcnt].odd1 = hfodd1;
+								new_int_match->arinf[new_int_match->arcnt].odd2 = bfodd2;
+								new_int_match->arinf[new_int_match->arcnt].nwhere = 6;
+								new_int_match->arinf[new_int_match->arcnt].c1 = 'H';
+								new_int_match->arinf[new_int_match->arcnt++].c2 = 'B';
+								new_int_match->arinf = (arbit_inf*)realloc(new_int_match->arinf, (new_int_match->arcnt + 1) * sizeof(arbit_inf));
+							}
+						}
+						if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
+							h1 = checkArbitrage(bfodd1, hfodd2);
+							if (h1 <= MIN_ARBIT) {
+								new_int_match->arinf[new_int_match->arcnt].ar = h1;
+								new_int_match->arinf[new_int_match->arcnt].ov = fabs(bhandi1);
+								new_int_match->arinf[new_int_match->arcnt].odd1 = bfodd1;
+								new_int_match->arinf[new_int_match->arcnt].odd2 = hfodd2;
+								new_int_match->arinf[new_int_match->arcnt].nwhere = 6;
+								new_int_match->arinf[new_int_match->arcnt].c1 = 'B';
+								new_int_match->arinf[new_int_match->arcnt++].c2 = 'H';
+								new_int_match->arinf = (arbit_inf*)realloc(new_int_match->arinf, (new_int_match->arcnt + 1) * sizeof(arbit_inf));
+							}
+						}
+						if (!(fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001 || fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001)) {
+							if (bhandi1 < hhandi2) {
+								v1 = bhandi1;
+								o1 = bfodd1;
+								v2 = hhandi2;
+								o2 = hfodd2;
+								new_int_match->inf[6][new_int_match->mcnt[6]].c1 = 'B';
+								new_int_match->inf[6][new_int_match->mcnt[6]].c2 = 'H';
+							}
+							else {
+								v1 = hhandi1;
+								o1 = hfodd1;
+								v2 = bhandi2;
+								o2 = bfodd2;
+								new_int_match->inf[6][new_int_match->mcnt[6]].c1 = 'H';
+								new_int_match->inf[6][new_int_match->mcnt[6]].c2 = 'B';
+							}
+							stake1 = 100; stake2 = stake1 * o1 / o2;
+							h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+							new_int_match->inf[6][new_int_match->mcnt[6]].middle = h1;
+							new_int_match->inf[6][new_int_match->mcnt[6]].handi1 = v1;
+							new_int_match->inf[6][new_int_match->mcnt[6]].handi2 = v2;;
+							new_int_match->inf[6][new_int_match->mcnt[6]].odd1 = o1;
+							new_int_match->inf[6][new_int_match->mcnt[6]].nalt = 2;
+							new_int_match->inf[6][new_int_match->mcnt[6]++].odd2 = o2;
+							new_int_match->inf[6] = (middle_inf*)realloc(new_int_match->inf[6], (new_int_match->mcnt[6] + 1) * sizeof(middle_inf));
+						}
+					}
+				}
+			}
+
+			//////////////////////////////////////////////////////////////////////////////
+			//  Asian handicap cards
+			/////////////////////////////////////////////////////////////////////////////
+			if (d.HasMember("RN_DATA")) {
+				const Value& rn_data = d["RN_DATA"];
+				sstrong = rn_data["STRONG"].IsNull() ? "null" : rn_data["STRONG"].GetString();
+				shandicap = rn_data["RATIO_R"].IsNull() ? "null" : rn_data["RATIO_R"].GetString();
+				if (shandicap != "null") {
+					shodd = rn_data["ior_RH"].IsNull() ? "null" : rn_data["ior_RH"].GetString();
+					scodd = rn_data["ior_RC"].IsNull() ? "null" : rn_data["ior_RC"].GetString();
+					sgoalo = rn_data["RATIO_OUO"].IsNull() ? "null" : rn_data["RATIO_OUO"].GetString();
+					sgoalu = rn_data["RATIO_OUU"].IsNull() ? "null" : rn_data["RATIO_OUU"].GetString();
+					sgoaloodd = rn_data["ior_OUH"].IsNull() ? "null" : rn_data["ior_OUH"].GetString();
+					sgoaluodd = rn_data["ior_OUC"].IsNull() ? "null" : rn_data["ior_OUC"].GetString();
+
+					if (sp.HasMember("asian_handicap_cards")) {
+						bodd1 = sp["asian_handicap_cards"]["odds"][0]["odds"].GetString();
+						bodd2 = sp["asian_handicap_cards"]["odds"][1]["odds"].GetString();
+						bhandicap1 = sp["asian_handicap_cards"]["odds"][0]["handicap"].GetString();
+						bhandicap2 = sp["asian_handicap_cards"]["odds"][1]["handicap"].GetString();
+						bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+						bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+
+						hhandi1 = get_handicap_from_string(shandicap.c_str(), '/');
+						hhandi2 = -hhandi1;
+
+						bfodd1 = atof(bodd1.c_str());
+						bfodd2 = atof(bodd2.c_str());
+						hfodd1 = atof(shodd.c_str());
+						hfodd2 = atof(scodd.c_str());
+						if (sstrong == "H") {
+							hhandi1 = hhandi2;
+							hhandi2 = -hhandi2;
+						}
+						//Check Arbitrage chance first
+						if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
+							h1 = checkArbitrage(hfodd1, bfodd2);
+							if (h1 <= MIN_ARBIT) {
+								new_int_match->arinf[new_int_match->arcnt].ar = h1;
+								new_int_match->arinf[new_int_match->arcnt].ov = fabs(hhandi1);
+								new_int_match->arinf[new_int_match->arcnt].odd1 = hfodd1;
+								new_int_match->arinf[new_int_match->arcnt].odd2 = bfodd2;
+								new_int_match->arinf[new_int_match->arcnt].nwhere = 7;
+								new_int_match->arinf[new_int_match->arcnt].c1 = 'H';
+								new_int_match->arinf[new_int_match->arcnt++].c2 = 'B';
+								new_int_match->arinf = (arbit_inf*)realloc(new_int_match->arinf, (new_int_match->arcnt + 1) * sizeof(arbit_inf));
+							}
+						}
+						if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
+							h1 = checkArbitrage(bfodd1, hfodd2);
+							if (h1 <= MIN_ARBIT) {
+								new_int_match->arinf[new_int_match->arcnt].ar = h1;
+								new_int_match->arinf[new_int_match->arcnt].ov = fabs(bhandi1);
+								new_int_match->arinf[new_int_match->arcnt].odd1 = bfodd1;
+								new_int_match->arinf[new_int_match->arcnt].odd2 = hfodd2;
+								new_int_match->arinf[new_int_match->arcnt].nwhere = 7;
+								new_int_match->arinf[new_int_match->arcnt].c1 = 'B';
+								new_int_match->arinf[new_int_match->arcnt++].c2 = 'H';
+								new_int_match->arinf = (arbit_inf*)realloc(new_int_match->arinf, (new_int_match->arcnt + 1) * sizeof(arbit_inf));
+							}
+						}
+						if (!(fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001 || fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001)) {
+							if (fabs(bhandi1) - fabs(hhandi1) < 0) {
+								//This means hga offer high value.
+								if (hhandi1 > 0) {
+									v1 = hhandi1;
+									o1 = hfodd1;
+									v2 = bhandi2;
+									o2 = bfodd2;
+									new_int_match->inf[7][new_int_match->mcnt[7]].c1 = 'H';
+									new_int_match->inf[7][new_int_match->mcnt[7]].c2 = 'B';
+								}
+								else {
+									v1 = hhandi2;
+									o1 = hfodd2;
+									v2 = bhandi1;
+									o2 = bfodd1;
+									new_int_match->inf[7][new_int_match->mcnt[7]].c1 = 'H';
+									new_int_match->inf[7][new_int_match->mcnt[7]].c2 = 'B';
+								}
+							}
+							else {
+								if (bhandi1 > 0) {
+									v1 = bhandi1;
+									o1 = bfodd1;
+									v2 = hhandi2;
+									o2 = hfodd2;
+									new_int_match->inf[7][new_int_match->mcnt[7]].c1 = 'B';
+									new_int_match->inf[7][new_int_match->mcnt[7]].c2 = 'H';
+								}
+								else {
+									v1 = bhandi2;
+									o1 = bfodd2;
+									v2 = hhandi1;
+									o2 = hfodd1;
+									new_int_match->inf[7][new_int_match->mcnt[7]].c1 = 'B';
+									new_int_match->inf[7][new_int_match->mcnt[7]].c2 = 'H';
+								}
+							}
+							stake1 = 100; stake2 = stake1 * o1 / o2;
+							h1 = calc_middle(stake1, stake2, o1, o2, v1, v2);
+							new_int_match->inf[7][new_int_match->mcnt[7]].middle = h1;
+							new_int_match->inf[7][new_int_match->mcnt[7]].handi1 = v1;
+							new_int_match->inf[7][new_int_match->mcnt[7]].handi2 = v2;;
+							new_int_match->inf[7][new_int_match->mcnt[7]].odd1 = o1;
+							new_int_match->inf[7][new_int_match->mcnt[7]++].odd2 = o2;
+							new_int_match->inf[7] = (middle_inf*)realloc(new_int_match->inf[7], (new_int_match->mcnt[7] + 1) * sizeof(middle_inf));
+						}
+					}
+					////////////////////////////////////////////////////////////////////////////////
+					// asian_total_cards
+					///////////////////////////////////////////////////////////////////////////////					
+
+					if (sp.HasMember("asian_total_cards")) {
+						bodd1 = sp["asian_total_cards"]["odds"][0]["odds"].GetString();
+						bodd2 = sp["asian_total_cards"]["odds"][1]["odds"].GetString();
+						bhandicap1 = sp["asian_total_cards"]["odds"][0]["name"].GetString();
+						bhandicap2 = sp["asian_total_cards"]["odds"][1]["name"].GetString();
+						bhandi1 = get_handicap_from_string(bhandicap1.c_str());
+						bhandi2 = get_handicap_from_string(bhandicap2.c_str());
+
+						bfodd1 = atof(bodd1.c_str());
+						bfodd2 = atof(bodd2.c_str());
+						hfodd1 = atof(sgoaloodd.c_str());
+						hfodd2 = atof(sgoaluodd.c_str());
+						sgoalo = ReplaceAll(sgoalo, "O", "");
+						sgoalu = ReplaceAll(sgoalu, "U", "");
+						hhandi1 = get_handicap_from_string(sgoalo.c_str(), '/');
+						hhandi2 = get_handicap_from_string(sgoalu.c_str(), '/');
+						if (fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001) {
+							h1 = checkArbitrage(hfodd1, bfodd2);
+							if (h1 <= MIN_ARBIT) {
+								new_int_match->arinf[new_int_match->arcnt].ar = h1;
+								new_int_match->arinf[new_int_match->arcnt].ov = fabs(hhandi1);
+								new_int_match->arinf[new_int_match->arcnt].odd1 = hfodd1;
+								new_int_match->arinf[new_int_match->arcnt].odd2 = bfodd2;
+								new_int_match->arinf[new_int_match->arcnt].nwhere = 8;
+								new_int_match->arinf[new_int_match->arcnt].c1 = 'H';
+								new_int_match->arinf[new_int_match->arcnt++].c2 = 'B';
+								new_int_match->arinf = (arbit_inf*)realloc(new_int_match->arinf, (new_int_match->arcnt + 1) * sizeof(arbit_inf));
+							}
+						}
+						if (fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001) {
+							h1 = checkArbitrage(bfodd1, hfodd2);
+							if (h1 <= MIN_ARBIT) {
+								new_int_match->arinf[new_int_match->arcnt].ar = h1;
+								new_int_match->arinf[new_int_match->arcnt].ov = fabs(bhandi1);
+								new_int_match->arinf[new_int_match->arcnt].odd1 = bfodd1;
+								new_int_match->arinf[new_int_match->arcnt].odd2 = hfodd2;
+								new_int_match->arinf[new_int_match->arcnt].nwhere = 8;
+								new_int_match->arinf[new_int_match->arcnt].c1 = 'B';
+								new_int_match->arinf[new_int_match->arcnt++].c2 = 'H';
+								new_int_match->arinf = (arbit_inf*)realloc(new_int_match->arinf, (new_int_match->arcnt + 1) * sizeof(arbit_inf));
+							}
+						}
+						if (!(fabs(fabs(bhandi1) - fabs(hhandi2)) < 0.001 || fabs(fabs(hhandi1) - fabs(bhandi2)) < 0.001)) {
+							if (bhandi1 < hhandi2) {
+								v1 = bhandi1;
+								o1 = bfodd1;
+								v2 = hhandi2;
+								o2 = hfodd2;
+								new_int_match->inf[8][new_int_match->mcnt[8]].c1 = 'B';
+								new_int_match->inf[8][new_int_match->mcnt[8]].c2 = 'H';
+							}
+							else {
+								v1 = hhandi1;
+								o1 = hfodd1;
+								v2 = bhandi2;
+								o2 = bfodd2;
+								new_int_match->inf[8][new_int_match->mcnt[8]].c1 = 'H';
+								new_int_match->inf[8][new_int_match->mcnt[8]].c2 = 'B';
+							}
+							stake1 = 100; stake2 = stake1 * o1 / o2;
+							h1 = calc_middle_ou(stake1, stake2, o1, o2, v1, v2, 'o', 'u');
+							new_int_match->inf[8][new_int_match->mcnt[8]].middle = h1;
+							new_int_match->inf[8][new_int_match->mcnt[8]].handi1 = v1;
+							new_int_match->inf[8][new_int_match->mcnt[8]].handi2 = v2;;
+							new_int_match->inf[8][new_int_match->mcnt[8]].odd1 = o1;
+							new_int_match->inf[8][new_int_match->mcnt[8]].nalt = 2;
+							new_int_match->inf[8][new_int_match->mcnt[8]++].odd2 = o2;
+							new_int_match->inf[8] = (middle_inf*)realloc(new_int_match->inf[8], (new_int_match->mcnt[8] + 1) * sizeof(middle_inf));
+						}
+					}
+				}
+			}
+		}
+	}
+}
+void COppCheckDlg::update_inter_table() {
+	if (new_int_match == NULL)
+		return;
+	int filelen1;
+	int idx = 0, j, narb = 0, k, nmid = 0;
+	char *readBuffer1;
+	wchar_t buff[260] = { 0 };
+	float middle;
+	FILE *fhga = fopen("hga/match.json", "rb"); // non-Windows use "r"
+	if (fhga == NULL)
+		return;
+	fseek(fhga, 0, SEEK_END);
+	filelen1 = ftell(fhga);
+	fseek(fhga, 0, SEEK_SET);
+	readBuffer1 = new char[filelen1 + 1];
+	memset(readBuffer1, 0, filelen1 + 1);
+	fread(readBuffer1, 1, filelen1, fhga);
+	fclose(fhga);
+
+	m_lstint.SetRedraw(FALSE);
+	m_lstint.DeleteAllItems();
+	m_lstint.SetRedraw(TRUE);
+
+	Document d;
+	d.Parse(readBuffer1);
+	delete readBuffer1;
+	
+	int nhandi = d.HasMember("handicap_count") ? d["handicap_count"].GetInt() : 0;
+	int nhalf = d.HasMember("1sthalf_count") ? d["1sthalf_count"].GetInt() : 0;
+	if (nhandi == 0)
+		return;
+	string sdatetime = d["DATETIME"].GetString();
+	string sleague = d["LEAGUE"].GetString();
+	string steamh = d["TEAM_H"].GetString();
+	string steamc = d["TEAM_c"].GetString();
+
+	TimeStamp2String(sdatetime.c_str(), buff);
+	m_lstint.InsertItem(idx, buff);
+
+	getWStr(sleague.c_str(), buff);
+	m_lstint.SetItemText(idx, 1, buff);
+
+	getWStr(steamh.c_str(), buff);
+	m_lstint.SetItemText(idx, 2, buff);
+
+	getWStr(steamc.c_str(), buff);
+	m_lstint.SetItemText(idx, 3, buff);
+	
+	for (j = 0; j < new_int_match->arcnt; j++) {
+		if (narb) {
+			m_lstint.InsertItem(idx + narb, L"");
+		}
+		memset(buff, 0, 260);
+		if (new_int_match->arinf[j].nwhere == 0 || new_int_match->arinf[j].nwhere == 2 || new_int_match->arinf[j].nwhere == 4 || new_int_match->arinf[j].nwhere == 7)
+			swprintf(buff, 260, L"%.3f(%.2f)", new_int_match->arinf[j].ar, new_int_match->arinf[j].ov);
+		else
+			swprintf(buff, 260, L"%.3f(o/u%.2f)", new_int_match->arinf[j].ar, new_int_match->arinf[j].ov);
+		m_lstint.SetItemText(idx + narb, 4, buff);
+
+		memset(buff, 0, 260);
+		getWhere(new_int_match->arinf[j].nwhere, buff);
+		m_lstint.SetItemText(idx + narb, 5, buff);
+
+		memset(buff, 0, 260);
+		swprintf(buff, 260, L"%.3f(%c)", new_int_match->arinf[j].odd1, new_int_match->arinf[j].c1);
+		m_lstint.SetItemText(idx + narb, 6, buff);
+
+		memset(buff, 0, 260);
+		swprintf(buff, 260, L"%.3f(%c)", new_int_match->arinf[j].odd2, new_int_match->arinf[j].c2);
+		m_lstint.SetItemText(idx + narb, 7, buff);
+
+
+		narb++;
+	}
+	for (j = 0; j < CHECK_PARAMS; j++) {
+		for (k = 0; k < new_int_match->mcnt[j]; k++) {
+			middle = new_int_match->inf[j][k].middle;
+			if (middle > g_nFilter) {
+				if (nmid == 0) {
+					if (narb == 0)
+						narb = 1;
+
+					m_lstint.InsertItem(idx + narb, L"");
+					narb++;
+
+					m_lstint.InsertItem(idx + narb, L"");
+					m_lstint.SetItemText(idx + narb, 1, L"Middle");
+					m_lstint.SetItemText(idx + narb, 2, L"");
+					m_lstint.SetItemText(idx + narb, 3, L"Handicap1");
+					m_lstint.SetItemText(idx + narb, 4, L"Handicap2");
+					m_lstint.SetItemText(idx + narb, 5, L"Where");
+					m_lstint.SetItemText(idx + narb, 6, L"Odd1");
+					m_lstint.SetItemText(idx + narb, 7, L"Odd2");
+
+
+					nmid++;
+				}
+				m_lstint.InsertItem(idx + narb + nmid, L"");
+
+
+				memset(buff, 0, 260);
+				swprintf(buff, 260, L"%.3f", middle);
+				m_lstint.SetItemText(idx + narb + nmid, 1, buff);
+
+				if (new_int_match->inf[j][k].nalt & 1)
+					m_lstint.SetItemText(idx + narb + nmid, 2, L"AlternativeLine");
+
+				memset(buff, 0, 260);
+				if (new_int_match->inf[j][k].nalt & 2)
+					swprintf(buff, 260, L"O%.2f", new_int_match->inf[j][k].handi1);
+				else
+					swprintf(buff, 260, L"%.3f", new_int_match->inf[j][k].handi1);
+				m_lstint.SetItemText(idx + narb + nmid, 3, buff);
+
+				memset(buff, 0, 260);
+				if (new_int_match->inf[j][k].nalt & 2)
+					swprintf(buff, 260, L"U%.2f", new_int_match->inf[j][k].handi2);
+				else
+					swprintf(buff, 260, L"%.3f", new_int_match->inf[j][k].handi2);
+				m_lstint.SetItemText(idx + narb + nmid, 4, buff);
+
+				memset(buff, 0, 260);
+				getWhere(j, buff);
+				m_lstint.SetItemText(idx + narb + nmid, 5, buff);
+
+				memset(buff, 0, 260);
+				swprintf(buff, 260, L"%.3f(%c)", new_int_match->inf[j][k].odd1, new_int_match->inf[j][k].c1);
+				m_lstint.SetItemText(idx + narb + nmid, 6, buff);
+
+				memset(buff, 0, 260);
+				swprintf(buff, 260, L"%.3f(%c)", new_int_match->inf[j][k].odd2, new_int_match->inf[j][k].c2);
+				m_lstint.SetItemText(idx + narb + nmid, 7, buff);
+				nmid++;
+			}
+		}
+	}
+}
+DWORD COppCheckDlg::inter_func() {
+	char buff[1000] = { 0 };
+	wchar_t cmdline[1000] = { 0 };
+	SHELLEXECUTEINFO ShRun = { 0 };
+//	WIN32_FIND_DATA fd;
+	match_inf *pmatch;
+	int nn1, nn2, nn3;
+	while (1) {
+		nn1 = GetTickCount();
+		Sleep(1000);
+		pmatch = (pinterested_match != NULL) ? pinterested_match : new_int_match;
+		if (pmatch == NULL)
+			continue;
+		memset(buff, 0, 1000);
+		memset(cmdline, 0, sizeof(wchar_t) * 1000);
+		sprintf(buff, "match_infor_by_id.py %s %d %d", pmatch->showtype, pmatch->lid, pmatch->hid);
+		MultiByteToWideChar(CP_ACP, 0, buff, strlen(buff), cmdline, 1000);
+		
+		
+		memset(&ShRun, 0, sizeof(SHELLEXECUTEINFO));
+		ShRun.cbSize = sizeof(SHELLEXECUTEINFO);
+		ShRun.fMask = SEE_MASK_NOCLOSEPROCESS;
+		ShRun.hwnd = NULL;
+		ShRun.lpVerb = NULL;
+		ShRun.lpFile = L"pythonw.exe";
+		ShRun.lpParameters = cmdline;
+		ShRun.lpDirectory = L"hga";
+		ShRun.nShow = SW_SHOW;
+		ShRun.hInstApp = NULL;
+		// Execute the file with the parameters
+		if (!ShellExecuteEx(&ShRun))
+		{
+		}
+		Sleep(10000);
+
+		load_single_match_hga_365();
+		update_inter_table();
+		nn2 = GetTickCount();
+		nn3 = nn2 - nn1;
+		nn3 = 0;
+	}
+}
+DWORD COppCheckDlg::inter_thread(LPVOID param) {
+	COppCheckDlg *pThis = (COppCheckDlg*)param;
+	if (pThis == NULL)
+		return 0;
+	return pThis->inter_func();
+}
 
 void COppCheckDlg::OnBnClickedBtnAddto()
 {
 	// TODO: Add your control notification handler code here
+	char buffs[1000] = { 0 };
+	wchar_t cmdline[1000] = { 0 };
+	SHELLEXECUTEINFO ShRun = { 0 };
+	WIN32_FIND_DATA fd;
+	match_inf *pmatch;
+	int nn1, nn2, nn3;
 	POSITION pos = m_org.GetFirstSelectedItemPosition();
 	int selected = -1;
 	if (pos != NULL)
@@ -2559,35 +3557,102 @@ void COppCheckDlg::OnBnClickedBtnAddto()
 		while (pos)
 		{
 			int nItem = m_org.GetNextSelectedItem(pos);
-			selected = nItem + 1;
+			selected = nItem;
 		}
 	}
+	if (!(m_status == 4 || m_status == 0)) {
+		MessageBox(L"Can not add while downloading.");
+		return;
+	}
 	wchar_t buff[1000] = { 0 };
-	m_org.GetItemText(selected, 10, buff, 100);
-	/*if (wcslen(buff) == 0) {
+	m_org.GetItemText(selected, 8, buff, 100);
+	if (wcslen(buff) == 0) {
 		MessageBox(L"Select correct line.");
 		return;
-	}*/
+	}
 	int iid = _wtoi(buff);
-	match_inf *pm = (match_inf*)iid;
-	swprintf(buff, 1000, L"match_infor_by_id.py %s %s %d", pm->showtype, pm->lid, pm->match_id);
+	pinterested_match = (match_inf*)iid;
+	MessageBox(L"Added to interested record. Please wait a few second...", L"Information", MB_ICONINFORMATION|MB_OK);
+#ifdef TEST_MODE
 	
-	// Prepare shellExecutInfo
-	SHELLEXECUTEINFO ShRun = { 0 };
+	memset(buffs, 0, 1000);
+	memset(cmdline, 0, sizeof(wchar_t) * 1000);
+	sprintf(buffs, "match_infor_by_id.py %s %d %d", pinterested_match->showtype, pinterested_match->lid, pinterested_match->hid);
+	MultiByteToWideChar(CP_ACP, 0, buffs, strlen(buffs), cmdline, 1000);
+
+
+	memset(&ShRun, 0, sizeof(SHELLEXECUTEINFO));
 	ShRun.cbSize = sizeof(SHELLEXECUTEINFO);
 	ShRun.fMask = SEE_MASK_NOCLOSEPROCESS;
 	ShRun.hwnd = NULL;
 	ShRun.lpVerb = NULL;
 	ShRun.lpFile = L"pythonw.exe";
-	ShRun.lpParameters = buff;
+	ShRun.lpParameters = cmdline;
 	ShRun.lpDirectory = L"hga";
 	ShRun.nShow = SW_SHOW;
 	ShRun.hInstApp = NULL;
-
 	// Execute the file with the parameters
 	if (!ShellExecuteEx(&ShRun))
 	{
-		// Send error message
-		MessageBox(L"Unable to get game record!");
 	}
+	Sleep(10000);
+
+	load_single_match_hga_365();
+	update_inter_table();
+	nn2 = GetTickCount();
+#endif
+}
+
+
+void COppCheckDlg::OnBnClickedChkAuto()
+{
+	// TODO: Add your control notification handler code here
+	int n = m_autochk.GetCheck();
+	DWORD dwThreadId;
+	if (n == 1) {
+		m_autorefresh = 1;
+		m_btn_refresh.EnableWindow(FALSE);
+		m_hcatch_auto = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)catch_func_auto, this, 0, &dwThreadId);
+	}
+	else {
+		m_autorefresh = 0;
+		m_btn_refresh.EnableWindow(TRUE);
+		if(m_hcatch_auto != INVALID_HANDLE_VALUE)
+			TerminateThread(m_hcatch_auto, 0);
+	}
+}
+
+
+void COppCheckDlg::OnBnClickedRefresh()
+{
+	// TODO: Add your control notification handler code here
+	DWORD dwThreadId;
+	m_autochk.SetCheck(0);
+	m_autochk.EnableWindow(FALSE);
+	m_btn_refresh.EnableWindow(FALSE);
+	m_hcatch = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)catch_thread, this, 0, &dwThreadId);
+}
+
+
+void COppCheckDlg::OnBnClickedChkGoal()
+{
+	// TODO: Add your control notification handler code here
+	goal_filter = !goal_filter;
+	g_updated = 1;
+}
+
+
+void COppCheckDlg::OnBnClickedChkCorner()
+{
+	// TODO: Add your control notification handler code here
+	corner_filter = !corner_filter;
+	g_updated = 1;
+}
+
+
+void COppCheckDlg::OnBnClickedChkBook()
+{
+	// TODO: Add your control notification handler code here
+	book_filter = !book_filter;
+	g_updated = 1;
 }
